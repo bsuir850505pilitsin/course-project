@@ -1,0 +1,110 @@
+; VHDD.INF
+; Virtual Hard Disk Drive installing file
+; Copyright (c) Jeronimo inc.
+;
+; Installation Notes:
+;
+;     Using Devcon: Type "devcon install VHDD.inf VHDD" to install
+;
+[Version]
+Signature="$WINDOWS NT$"
+Class=Virtual HDD
+ClassGuid={78A1C341-4539-11d3-B88D-00C04FAD5171} ;from MS RamDisk
+Provider=%ProviderName%
+DriverVer=04/03/2011,1.00.0000.1
+CatalogFile=VirtualHDD.cat
+
+;12 == %windir%\system32\drivers для Windows 2000/XP/2003 
+[DestinationDirs]
+DefaultDestDir = 12
+
+[ClassInstall32]
+Addreg=VHDDClassReg
+
+;HKR - context partition of system register
+[VHDDClassReg]
+HKR,,,0,%ClassName%
+
+[VHDDCopyfiles]
+VHDD.sys
+
+;install disk names
+[SourceDisksNames]
+1=%VHDDInstDisk%,
+
+;install file names
+[SourceDisksFiles]
+VHDD.sys=1
+
+[Manufacturer]
+%ProviderName% = VHDD,NT$ARCH$
+
+;Win2K
+[VHDD]
+%VHDDDriverDesc% = VHDDInstall, VHDD
+
+;WinXP & later
+[VHDD.NT$ARCH$]
+%VHDDDriverDesc% = VHDDInstall, VHDD
+
+[VHDDInstall.NT]
+CopyFiles = VHDDCopyfiles
+
+;second parameter means that this is Functional or NT-style driver
+[VHDDInstall.NT.Services]
+AddService = VHDD, %SPSVCINST_ASSOCSERVICE%, VHDDServiceInst
+
+[VHDDServiceInst]
+ServiceType   = %SERVICE_KERNEL_DRIVER%
+StartType     = %SERVICE_DEMAND_START%
+ErrorControl  = %SERVICE_ERROR_NORMAL%
+DisplayName   = %VHDDServiceDesc%
+ServiceBinary = %12%\VHDD.sys
+AddReg        = VHDDAddReg
+
+;from RAMDISK
+[VHDDAddReg]
+HKR, "Parameters", "BreakOnEntry",      %REG_DWORD%, 0x00000000
+HKR, "Parameters", "DiskSize",          %REG_DWORD%, 0x00100000
+HKR, "Parameters", "DriveLetter",       %REG_SZ%,    "V:"
+HKR, "Parameters", "RootDirEntries",    %REG_DWORD%, 0x00000200
+HKR, "Parameters", "SectorsPerCluster", %REG_DWORD%, 0x00000002
+
+;--------------------------------Coinstaller
+[DestinationDirs]
+CoInstaller_CopyFiles = 11
+
+[VHDDInstall.NT.CoInstallers]
+AddReg=CoInstaller_AddReg
+CopyFiles=CoInstaller_CopyFiles
+
+[CoInstaller_CopyFiles]
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
+
+[SourceDisksFiles]
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
+
+[CoInstaller_AddReg]
+HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
+
+[VHDDInstall.NT.Wdf]
+KmdfService = VHDD, VHDD_wdfsect
+
+[VHDD_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$.$KMDFVERSION$
+
+;-------------------------------------------
+
+
+[Strings]
+ProviderName	= "Jeronimo inc."
+ClassName	= "Virtual Devices"
+VHDDDriverDesc	= "Virtual Hard Disk Drive"
+VHDDServiceDesc	= "Virtual HDD Driver"
+VHDDInstDisk	= "Virtual HDD Install Disk"
+SPSVCINST_ASSOCSERVICE = 0x00000002
+SERVICE_KERNEL_DRIVER  = 1
+SERVICE_DEMAND_START   = 3
+SERVICE_ERROR_NORMAL   = 1
+REG_DWORD              = 0x00010001
+REG_SZ                 = 0x00000000
