@@ -65,5 +65,5 @@ VOID VHDDEvtIoDeviceControl(IN WDFQUEUE  Queue, IN WDFREQUEST  Request, IN size_
 VOID VHDDEvtIoRead(IN WDFQUEUE Queue, IN WDFREQUEST Request, IN size_t Length);
 VOID VHDDEvtIoWrite(IN WDFQUEUE Queue, IN WDFREQUEST Request, IN size_t Length);
 VOID VHDDQueryDiskRegParameters(IN PWSTR RegistryPath,IN PDISK_INFO DiskRegInfo);
-
+VOID CheckStatus(NTSTATUS Status);
 #endif
