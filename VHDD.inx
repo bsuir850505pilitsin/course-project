@@ -1,29 +1,23 @@
-; VHDD.INF
-; Virtual Hard Disk Drive installing file
-; Copyright (c) Jeronimo inc.
-;
-; Installation Notes:
-;
-;     Using Devcon: Type "devcon install VHDD.inf VHDD" to install
-;
 [Version]
 Signature="$WINDOWS NT$"
-Class=Virtual HDD
-ClassGuid={78A1C341-4539-11d3-B88D-00C04FAD5171} ;from MS RamDisk
+Class=DiskDrive
+;{4D36E967-E325-11CE-BFC1-08002BE10318}; - disk drive - sootvetstvuet realnim HDD
+;{78A1C341-4539-11d3-B88D-00C04FAD5171}; - Sample driver
+;{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}; - disk drive - unknown
+ClassGuid={4D36E967-E325-11CE-BFC1-08002BE10318};{78A1C341-4539-11d3-B88D-00C04FAD5171};{53F56307-B6BF-11D0-94F2-00A0C91EFB8B};
 Provider=%ProviderName%
-DriverVer=04/03/2011,1.00.0000.1
-CatalogFile=VirtualHDD.cat
+DriverVer=04/03/2011,6.00.0000.1
 
 ;12 == %windir%\system32\drivers для Windows 2000/XP/2003 
 [DestinationDirs]
 DefaultDestDir = 12
 
-[ClassInstall32]
-Addreg=VHDDClassReg
+;[ClassInstall32]
+;Addreg=VHDDClassReg
 
 ;HKR - context partition of system register
-[VHDDClassReg]
-HKR,,,0,%ClassName%
+;[VHDDClassReg]
+;HKR,,,0,%ClassName%
 
 [VHDDCopyfiles]
 VHDD.sys
@@ -37,14 +31,15 @@ VHDD.sys
 VHDD.sys=1
 
 [Manufacturer]
-%ProviderName% = VHDD,NT$ARCH$
+%ProviderName% = VHDD,NTx86;NT$ARCH$
 
 ;Win2K
 [VHDD]
 %VHDDDriverDesc% = VHDDInstall, VHDD
 
 ;WinXP & later
-[VHDD.NT$ARCH$]
+;[VHDD.NT$ARCH$]
+[VHDD.NTx86]
 %VHDDDriverDesc% = VHDDInstall, VHDD
 
 [VHDDInstall.NT]
@@ -68,12 +63,12 @@ HKR, "Parameters", "BreakOnEntry",      %REG_DWORD%, 0x00000000
 HKR, "Parameters", "DiskSize",          %REG_DWORD%, 0x00100000
 HKR, "Parameters", "DriveLetter",       %REG_SZ%,    "V:"
 HKR, "Parameters", "RootDirEntries",    %REG_DWORD%, 0x00000200
-HKR, "Parameters", "SectorsPerCluster", %REG_DWORD%, 0x00000002
+HKR, "Parameters", "SectorsPerCluster", %REG_DWORD%, 0x00000001
 
 
 [Strings]
 ProviderName	= "Jeronimo inc."
-ClassName	= "Virtual Devices"
+ClassName		= "Disk drives"
 VHDDDriverDesc	= "Virtual Hard Disk Drive"
 VHDDServiceDesc	= "Virtual HDD Driver"
 VHDDInstDisk	= "Virtual HDD Install Disk"
