@@ -75,26 +75,7 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
 
 	if(!NT_SUCCESS(status = WdfDeviceCreate(&DeviceInit, &DeviceAttributes, &Device)))
 	{	
-		switch(status){
-		case STATUS_INVALID_PARAMETER : 
-			DbgPrint("STATUS_INVALID_PARAMETER");
-			break;
-		case STATUS_INFO_LENGTH_MISMATCH : 
-			DbgPrint("STATUS_INFO_LENGTH_MISMATCH");
-			break;
-		case STATUS_POWER_STATE_INVALID : 
-			DbgPrint("STATUS_POWER_STATE_INVALID");
-			break;
-		case STATUS_INSUFFICIENT_RESOURCES : 
-			DbgPrint("STATUS_INSUFFICIENT_RESOURCES");
-			break;
-		case STATUS_WDF_NO_CALLBACK : 
-			DbgPrint("STATUS_WDF_NO_CALLBACK");
-			break;
-		case STATUS_UNSUCCESSFUL : 
-			DbgPrint("STATUS_UNSUCCESSFUL");
-			break;
-		}
+		CheckStatus(status);
 		DbgPrint("return after WdfDeviceCreate");
 		return status;
 	}
@@ -109,26 +90,7 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&QueueAttributes, QUEUE_EXTENSION);
 	if(!NT_SUCCESS(status = WdfIoQueueCreate(Device, &IOQueueConfig, &QueueAttributes, &Queue)))
 	{	
-	switch(status){
-		case STATUS_INVALID_PARAMETER : 
-			DbgPrint("STATUS_INVALID_PARAMETER");
-			break;
-		case STATUS_INFO_LENGTH_MISMATCH : 
-			DbgPrint("STATUS_INFO_LENGTH_MISMATCH");
-			break;
-		case STATUS_POWER_STATE_INVALID : 
-			DbgPrint("STATUS_POWER_STATE_INVALID");
-			break;
-		case STATUS_INSUFFICIENT_RESOURCES : 
-			DbgPrint("STATUS_INSUFFICIENT_RESOURCES");
-			break;
-		case STATUS_WDF_NO_CALLBACK : 
-			DbgPrint("STATUS_WDF_NO_CALLBACK");
-			break;
-		case STATUS_UNSUCCESSFUL : 
-			DbgPrint("STATUS_UNSUCCESSFUL");
-			break;
-		}
+		CheckStatus(status);
 		DbgPrint("return after WdfIoQueueCreate");
 		return status;
 	}
@@ -308,7 +270,7 @@ VOID VHDDEvtIoDeviceControl (
 	switch (IoControlCode) {
 		//this is only for debugging
 		//--------------------//--------------------//--------------------//--------------------
-	case IOCTL_STORAGE_BREAK_RESERVATION:
+	/*case IOCTL_STORAGE_BREAK_RESERVATION:
 		DbgPrint("IOCTL_STORAGE_BREAK_RESERVATION");
 		break;
 	case IOCTL_STORAGE_CHECK_VERIFY:
@@ -376,7 +338,7 @@ VOID VHDDEvtIoDeviceControl (
 		break;
 	case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME:
 		DbgPrint("IOCTL_MOUNTDEV_QUERY_DEVICE_NAME"); 
-		break; 
+		break; */
 		//--------------------//--------------------//--------------------//--------------------
 	case IOCTL_STORAGE_SET_HOTPLUG_INFO:
 		DbgPrint("IOCTL_STORAGE_SET_HOTPLUG_INFO");
@@ -468,33 +430,7 @@ VOID VHDDEvtIoDeviceControl (
     }
 
 	
-		switch(Status){
-			case STATUS_SUCCESS:
-				DbgPrint("STATUS_SUCCESS");
-				break;
-			case STATUS_INVALID_PARAMETER : 
-				DbgPrint("STATUS_INVALID_PARAMETER");
-				break;
-			case STATUS_INFO_LENGTH_MISMATCH : 
-				DbgPrint("STATUS_INFO_LENGTH_MISMATCH");
-				break;
-			case STATUS_POWER_STATE_INVALID : 
-				DbgPrint("STATUS_POWER_STATE_INVALID");
-				break;
-			case STATUS_INSUFFICIENT_RESOURCES : 
-				DbgPrint("STATUS_INSUFFICIENT_RESOURCES");
-				break;
-			case STATUS_WDF_NO_CALLBACK : 
-				DbgPrint("STATUS_WDF_NO_CALLBACK");
-				break;
-			case STATUS_UNSUCCESSFUL : 
-				DbgPrint("STATUS_UNSUCCESSFUL");
-				break;
-			case STATUS_INVALID_DEVICE_REQUEST:
-				DbgPrint("STATUS_INVALID_DEVICE_REQUEST");
-				break;
-			default: DbgPrint("STATUS - %x -%d", Status, Status);
-		}
+	CheckStatus(Status);
     WdfRequestCompleteWithInformation(Request, Status, information);
 }
 
@@ -560,6 +496,35 @@ VOID VHDDEvtIoWrite(
                                     Length);
         }
     WdfRequestCompleteWithInformation(Request, Status, (ULONG_PTR)Length);
+}
+VOID CheckStatus(NTSTATUS Status){
+		switch(Status){
+			case STATUS_SUCCESS:
+				DbgPrint("STATUS_SUCCESS");
+				break;
+			case STATUS_INVALID_PARAMETER : 
+				DbgPrint("STATUS_INVALID_PARAMETER");
+				break;
+			case STATUS_INFO_LENGTH_MISMATCH : 
+				DbgPrint("STATUS_INFO_LENGTH_MISMATCH");
+				break;
+			case STATUS_POWER_STATE_INVALID : 
+				DbgPrint("STATUS_POWER_STATE_INVALID");
+				break;
+			case STATUS_INSUFFICIENT_RESOURCES : 
+				DbgPrint("STATUS_INSUFFICIENT_RESOURCES");
+				break;
+			case STATUS_WDF_NO_CALLBACK : 
+				DbgPrint("STATUS_WDF_NO_CALLBACK");
+				break;
+			case STATUS_UNSUCCESSFUL : 
+				DbgPrint("STATUS_UNSUCCESSFUL");
+				break;
+			case STATUS_INVALID_DEVICE_REQUEST:
+				DbgPrint("STATUS_INVALID_DEVICE_REQUEST");
+				break;
+			default: DbgPrint("STATUS - %x -%d", Status, Status);
+		}
 }
 /*VOID VHDDDriverUnload (
     IN WDFDRIVER  Driver
