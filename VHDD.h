@@ -19,7 +19,7 @@
 #define DRIVE_LETTER_BUFFER_SIZE        10
 #define DOS_DEVNAME_BUFFER_SIZE         (sizeof(DOS_DEVICE_NAME) / 2) + 10
 
-#define VHDD_MEDIA_TYPE              0xF8
+#define VHDD_MEDIA_TYPE					FixedMedia //0xF8
 #define DIR_ENTRIES_PER_SECTOR          16
 
 #define DEFAULT_DISK_SIZE               (1024*1024*64)     // 1 MB
@@ -56,6 +56,7 @@ EVT_WDF_OBJECT_CONTEXT_CLEANUP VHDDEvtCleanupCallback;
 EVT_WDF_IO_QUEUE_IO_DEVICE_CONTROL  VHDDEvtIoDeviceControl;
 EVT_WDF_IO_QUEUE_IO_WRITE  VHDDEvtIoWrite;
 EVT_WDF_IO_QUEUE_IO_READ  VHDDEvtIoRead;
+EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL VHDDEvtIoInternalDeviceControl;
 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PCUNICODE_STRING RegistryPath);
 NTSTATUS VHDDEvtDriverDeviceAdd(IN WDFDRIVER Driver, IN PWDFDEVICE_INIT DeviceInit);
@@ -66,4 +67,5 @@ VOID VHDDEvtIoRead(IN WDFQUEUE Queue, IN WDFREQUEST Request, IN size_t Length);
 VOID VHDDEvtIoWrite(IN WDFQUEUE Queue, IN WDFREQUEST Request, IN size_t Length);
 VOID VHDDQueryDiskRegParameters(IN PWSTR RegistryPath,IN PDISK_INFO DiskRegInfo);
 VOID CheckStatus(NTSTATUS Status);
+VOID VHDDEvtIoInternalDeviceControl(IN WDFQUEUE  Queue, IN WDFREQUEST  Request, IN size_t OutputBufferLength, IN size_t InputBufferLength, IN ULONG  IoControlCode);
 #endif

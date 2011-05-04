@@ -1,26 +1,13 @@
-[Version]
-Signature="$WINDOWS NT$"
-Class=DiskDrive
 ;{4D36E967-E325-11CE-BFC1-08002BE10318}; - disk drive - sootvetstvuet realnim HDD
 ;{78A1C341-4539-11d3-B88D-00C04FAD5171}; - Sample driver
 ;{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}; - disk drive - unknown
-ClassGuid={4D36E967-E325-11CE-BFC1-08002BE10318};{78A1C341-4539-11d3-B88D-00C04FAD5171};{53F56307-B6BF-11D0-94F2-00A0C91EFB8B};
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=DiskDrive
+ClassGuid={53F56307-B6BF-11D0-94F2-00A0C91EFB8B}; 
 Provider=%ProviderName%
-DriverVer=04/03/2011,6.00.0000.1
-
-;12 == %windir%\system32\drivers для Windows 2000/XP/2003 
-[DestinationDirs]
-DefaultDestDir = 12
-
-;[ClassInstall32]
-;Addreg=VHDDClassReg
-
-;HKR - context partition of system register
-;[VHDDClassReg]
-;HKR,,,0,%ClassName%
-
-[VHDDCopyfiles]
-VHDD.sys
+DriverVer=04/03/2011,6.1.7600.16380
 
 ;install disk names
 [SourceDisksNames]
@@ -30,23 +17,51 @@ VHDD.sys
 [SourceDisksFiles]
 VHDD.sys=1
 
+[VHDDCopyfiles]
+VHDD.sys,,,1
+
+[VHDDCopyfiles.NTx86]
+VHDD.sys,,,1
+
+;12 == %windir%\system32\drivers для Windows 2000/XP/2003 
+;11 == C:\WINDOWS\System
+;10 == C:\WINDOWS
+[DestinationDirs]
+VHDDCopyfiles = 10,System32\Drivers
+VHDDCopyfiles.NTx86 = 10,System32\Drivers
+
 [Manufacturer]
-%ProviderName% = VHDD,NTx86;NT$ARCH$
+%ProviderName% = VHDD,NTx86
+
+;[ClassInstall32]
+;Addreg=VHDDClassReg
+
+;HKR - context partition of system register
+;[VHDDClassReg]
+;HKR,,,0,%ClassName%
 
 ;Win2K
 [VHDD]
 %VHDDDriverDesc% = VHDDInstall, VHDD
 
 ;WinXP & later
-;[VHDD.NT$ARCH$]
 [VHDD.NTx86]
 %VHDDDriverDesc% = VHDDInstall, VHDD
 
-[VHDDInstall.NT]
+[DefaultInstall]
+CopyFiles = VHDDCopyfiles
+
+[VHDDInstall]
+CopyFiles = VHDDCopyfiles
+
+[VHDDInstall.NTx86]
 CopyFiles = VHDDCopyfiles
 
 ;second parameter means that this is Functional or NT-style driver
-[VHDDInstall.NT.Services]
+[VHDDInstall.Services]
+AddService = VHDD, %SPSVCINST_ASSOCSERVICE%, VHDDServiceInst
+
+[VHDDInstall.NTx86.Services]
 AddService = VHDD, %SPSVCINST_ASSOCSERVICE%, VHDDServiceInst
 
 [VHDDServiceInst]
@@ -64,7 +79,6 @@ HKR, "Parameters", "DiskSize",          %REG_DWORD%, 0x00100000
 HKR, "Parameters", "DriveLetter",       %REG_SZ%,    "V:"
 HKR, "Parameters", "RootDirEntries",    %REG_DWORD%, 0x00000200
 HKR, "Parameters", "SectorsPerCluster", %REG_DWORD%, 0x00000001
-
 
 [Strings]
 ProviderName	= "Jeronimo inc."

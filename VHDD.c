@@ -42,23 +42,23 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
     UNREFERENCED_PARAMETER(Driver);
 
 	DbgPrint("VHDDEvtDriverDeviceAdd routine");
-	//4d36e967-e325-11ce-bfc1-08002be10318
-	diskGuid.Data1 = 1295444327; //in hex - 4d36e967
-	diskGuid.Data2 = 58149; //in hex - e325
-	diskGuid.Data3 = 4558; //in hex - 11ce
-	diskGuid.Data4[0] = 191; //in hex - bfc1
-	diskGuid.Data4[1] = 193;
+	//{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}
+	diskGuid.Data1 = 0x53f56307;
+	diskGuid.Data2 = 0xb6bf;
+	diskGuid.Data3 = 0x11d0;
+	diskGuid.Data4[0] = 0x94;
+	diskGuid.Data4[1] = 0xf2;
 	//191   193
-	diskGuid.Data4[2] = 8;
-	diskGuid.Data4[3] = 0;
-	diskGuid.Data4[4] = 43;
-	diskGuid.Data4[5] = 225;
-	diskGuid.Data4[6] = 3;
-	diskGuid.Data4[7] = 24;
-	DbgPrint("%x-%x-%x-%x%x-%2x%2x%2x%2x%2x%2x",diskGuid.Data1, diskGuid.Data2, diskGuid.Data3,
+	diskGuid.Data4[2] = 0x00;
+	diskGuid.Data4[3] = 0xa0;
+	diskGuid.Data4[4] = 0xc9;
+	diskGuid.Data4[5] = 0x1e;
+	diskGuid.Data4[6] = 0xfb;
+	diskGuid.Data4[7] = 0x8b;
+	DbgPrint("{%x-%x-%x-%x%x-%2x%2x%2x%2x%2x%2x}",diskGuid.Data1, diskGuid.Data2, diskGuid.Data3,
 					diskGuid.Data4[0],diskGuid.Data4[1], diskGuid.Data4[2], diskGuid.Data4[3], diskGuid.Data4[4],
 					diskGuid.Data4[5],diskGuid.Data4[6], diskGuid.Data4[7]);
-	DbgPrint("4d36e967-e325-11ce-bfc1-08002be10318");
+	DbgPrint("{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}");
 	//DeviceInit = WdfControlDeviceInitAllocate(Driver, &SDLLstr);
 	if(!NT_SUCCESS(status = WdfDeviceInitAssignName(DeviceInit, &DevName)))
 	{	
@@ -86,6 +86,7 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
 	IOQueueConfig.EvtIoDeviceControl = VHDDEvtIoDeviceControl;
     IOQueueConfig.EvtIoRead = VHDDEvtIoRead;
     IOQueueConfig.EvtIoWrite = VHDDEvtIoWrite;
+	IOQueueConfig.EvtIoInternalDeviceControl = VHDDEvtIoInternalDeviceControl;
 
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&QueueAttributes, QUEUE_EXTENSION);
 	if(!NT_SUCCESS(status = WdfIoQueueCreate(Device, &IOQueueConfig, &QueueAttributes, &Queue)))
@@ -268,78 +269,6 @@ VOID VHDDEvtIoDeviceControl (
     UNREFERENCED_PARAMETER(InputBufferLength);
 	
 	switch (IoControlCode) {
-		//this is only for debugging
-		//--------------------//--------------------//--------------------//--------------------
-	/*case IOCTL_STORAGE_BREAK_RESERVATION:
-		DbgPrint("IOCTL_STORAGE_BREAK_RESERVATION");
-		break;
-	case IOCTL_STORAGE_CHECK_VERIFY:
-		DbgPrint("IOCTL_STORAGE_CHECK_VERIFY");
-		break;
-	case IOCTL_STORAGE_CHECK_VERIFY2:
-		DbgPrint("IOCTL_STORAGE_CHECK_VERIFY2");
-		break;
-	case IOCTL_STORAGE_EJECT_MEDIA:
-		DbgPrint("IOCTL_STORAGE_EJECT_MEDIA");
-		break;
-	case IOCTL_STORAGE_EJECTION_CONTROL:
-		DbgPrint("IOCTL_STORAGE_EJECTION_CONTROL");
-		break;
-	case IOCTL_STORAGE_FIND_NEW_DEVICES:
-		DbgPrint("IOCTL_STORAGE_FIND_NEW_DEVICES");
-		break;
-	case IOCTL_STORAGE_GET_DEVICE_NUMBER:
-		DbgPrint("IOCTL_STORAGE_GET_DEVICE_NUMBER");
-		break;
-	case IOCTL_STORAGE_GET_MEDIA_SERIAL_NUMBER:
-		DbgPrint("IOCTL_STORAGE_GET_MEDIA_SERIAL_NUMBER");
-		break;
-	case IOCTL_STORAGE_GET_MEDIA_TYPES:
-		DbgPrint("IOCTL_STORAGE_GET_MEDIA_TYPES");
-		break;
-	case IOCTL_STORAGE_GET_MEDIA_TYPES_EX:
-		DbgPrint("IOCTL_STORAGE_GET_MEDIA_TYPES_EX");
-		break;
-	case IOCTL_STORAGE_LOAD_MEDIA:
-		DbgPrint("IOCTL_STORAGE_LOAD_MEDIA");
-		break;
-	case IOCTL_STORAGE_LOAD_MEDIA2:
-		DbgPrint("IOCTL_STORAGE_LOAD_MEDIA2");
-		break;
-	case IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES:
-		DbgPrint("IOCTL_STORAGE_MANAGE_DATA_SET_ATTRIBUTES");
-		break;
-	case IOCTL_STORAGE_MCN_CONTROL:
-		DbgPrint("IOCTL_STORAGE_MCN_CONTROL");
-		break;
-	case IOCTL_STORAGE_MEDIA_REMOVAL:
-		DbgPrint("IOCTL_STORAGE_MEDIA_REMOVAL");
-		break;
-	case IOCTL_STORAGE_PERSISTENT_RESERVE_IN:
-		DbgPrint("IOCTL_STORAGE_PERSISTENT_RESERVE_IN");
-		break;
-	case IOCTL_STORAGE_PERSISTENT_RESERVE_OUT:
-		DbgPrint("IOCTL_STORAGE_PERSISTENT_RESERVE_OUT");
-		break;
-	case IOCTL_STORAGE_PREDICT_FAILURE:
-		DbgPrint("IOCTL_STORAGE_PREDICT_FAILURE");
-		break;
-	case IOCTL_STORAGE_RELEASE:
-		DbgPrint("IOCTL_STORAGE_RELEASE");
-		break;
-	case IOCTL_STORAGE_RESERVE:
-		DbgPrint("IOCTL_STORAGE_RESERVE");
-		break;
-	case IOCTL_STORAGE_RESET_BUS:
-		DbgPrint("IOCTL_STORAGE_RESET_BUS");
-		break;
-	case IOCTL_STORAGE_RESET_DEVICE:
-		DbgPrint("IOCTL_STORAGE_RESET_DEVICE");
-		break;
-	case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME:
-		DbgPrint("IOCTL_MOUNTDEV_QUERY_DEVICE_NAME"); 
-		break; */
-		//--------------------//--------------------//--------------------//--------------------
 	case IOCTL_STORAGE_SET_HOTPLUG_INFO:
 		DbgPrint("IOCTL_STORAGE_SET_HOTPLUG_INFO");
 		break;
@@ -427,6 +356,31 @@ VOID VHDDEvtIoDeviceControl (
 			Status = STATUS_SUCCESS;
 			break;
 	default: DbgPrint("VHDDEvtIoDeviceControl - %x - %d", IoControlCode, IoControlCode);
+    }
+
+	
+	CheckStatus(Status);
+    WdfRequestCompleteWithInformation(Request, Status, information);
+}
+VOID VHDDEvtIoInternalDeviceControl (
+    IN WDFQUEUE  Queue,
+    IN WDFREQUEST  Request,
+    IN size_t  OutputBufferLength,
+    IN size_t  InputBufferLength,
+    IN ULONG  IoControlCode
+    )
+{
+    NTSTATUS          Status = STATUS_INVALID_DEVICE_REQUEST;
+    ULONG_PTR         information = 0;
+    size_t            bufSize;
+    PDEVICE_EXTENSION devExt = QueueGetExtension(Queue)->DeviceExtension;
+
+    UNREFERENCED_PARAMETER(OutputBufferLength);
+    UNREFERENCED_PARAMETER(InputBufferLength);
+	
+	switch (IoControlCode) {
+	
+	default: DbgPrint("---------------\nVHDDEvtIoInternalDeviceControl - %x - %d\n---------------", IoControlCode, IoControlCode);
     }
 
 	
