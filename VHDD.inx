@@ -33,12 +33,12 @@ VHDDCopyfiles.NTx86 = 10,System32\Drivers
 [Manufacturer]
 %ProviderName% = VHDD,NTx86
 
-;[ClassInstall32]
-;Addreg=VHDDClassReg
+[ClassInstall32]
+Addreg=VHDDClassReg
 
 ;HKR - context partition of system register
-;[VHDDClassReg]
-;HKR,,,0,%ClassName%
+[VHDDClassReg]
+HKR,,,0,%ClassName%
 
 ;Win2K
 [VHDD]
@@ -75,10 +75,10 @@ AddReg        = VHDDAddReg
 ;from RAMDISK
 [VHDDAddReg]
 HKR, "Parameters", "BreakOnEntry",      %REG_DWORD%, 0x00000000
-HKR, "Parameters", "DiskSize",          %REG_DWORD%, 0x00100000
+HKR, "Parameters", "DiskSize",          %REG_DWORD%, 0x08000000 
 HKR, "Parameters", "DriveLetter",       %REG_SZ%,    "V:"
 HKR, "Parameters", "RootDirEntries",    %REG_DWORD%, 0x00000200
-HKR, "Parameters", "SectorsPerCluster", %REG_DWORD%, 0x00000001
+HKR, "Parameters", "SectorsPerCluster", %REG_DWORD%, 0x00000002
 
 [Strings]
 ProviderName	= "Jeronimo inc."

@@ -4,7 +4,7 @@
 #pragma alloc_text(PAGE, VHDDEvtDriverDeviceAdd)
 #pragma alloc_text(PAGE, VHDDEvtCleanupCallback)
 #pragma alloc_text(PAGE, VHDDQueryDiskRegParameters)
-//#pragma alloc_text(PAGE, VHDDEvtDriverUnload)
+#pragma alloc_text(PAGE, VHDDFormatDisk)
 #endif
 
 NTSTATUS DriverEntry(
@@ -17,7 +17,6 @@ NTSTATUS DriverEntry(
 	DbgPrint("DriverEntry routine");
 
 	WDF_DRIVER_CONFIG_INIT(&Config, VHDDEvtDriverDeviceAdd);
-	//Config.EvtDriverUnload = VHDDEvtDriverUnload;
 return WdfDriverCreate(DriverObject, RegistryPath, WDF_NO_OBJECT_ATTRIBUTES, &Config, WDF_NO_HANDLE);
 }
 
@@ -34,38 +33,19 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
 	WDF_IO_QUEUE_CONFIG		IOQueueConfig;
 	WDFQUEUE				Queue;
 	PQUEUE_EXTENSION		pQueueExtension;
-	GUID					diskGuid;
 	DECLARE_CONST_UNICODE_STRING(DevName, NT_DEVICE_NAME);
-	DECLARE_CONST_UNICODE_STRING(SDLLstr, L"SDDL_DEVOBJ_SYS_ALL"); //_ADM_RWX_WORLD_RW_RES_R
-	WDFMEMORY mem = NULL;	
+
 	PAGED_CODE();
     UNREFERENCED_PARAMETER(Driver);
 
 	DbgPrint("VHDDEvtDriverDeviceAdd routine");
-	//{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}
-	diskGuid.Data1 = 0x53f56307;
-	diskGuid.Data2 = 0xb6bf;
-	diskGuid.Data3 = 0x11d0;
-	diskGuid.Data4[0] = 0x94;
-	diskGuid.Data4[1] = 0xf2;
-	//191   193
-	diskGuid.Data4[2] = 0x00;
-	diskGuid.Data4[3] = 0xa0;
-	diskGuid.Data4[4] = 0xc9;
-	diskGuid.Data4[5] = 0x1e;
-	diskGuid.Data4[6] = 0xfb;
-	diskGuid.Data4[7] = 0x8b;
-	DbgPrint("{%x-%x-%x-%x%x-%2x%2x%2x%2x%2x%2x}",diskGuid.Data1, diskGuid.Data2, diskGuid.Data3,
-					diskGuid.Data4[0],diskGuid.Data4[1], diskGuid.Data4[2], diskGuid.Data4[3], diskGuid.Data4[4],
-					diskGuid.Data4[5],diskGuid.Data4[6], diskGuid.Data4[7]);
-	DbgPrint("{53F56307-B6BF-11D0-94F2-00A0C91EFB8B}");
-	//DeviceInit = WdfControlDeviceInitAllocate(Driver, &SDLLstr);
+
 	if(!NT_SUCCESS(status = WdfDeviceInitAssignName(DeviceInit, &DevName)))
 	{	
 		DbgPrint("return after WdfDeviceInitAssignName");
 		return status;
 	}
-	WdfDeviceInitSetDeviceClass(DeviceInit, &diskGuid);
+
 	WdfDeviceInitSetDeviceType(DeviceInit, FILE_DEVICE_DISK);
 	WdfDeviceInitSetExclusive(DeviceInit, FALSE);
 	WdfDeviceInitSetIoType(DeviceInit, WdfDeviceIoDirect);
@@ -86,7 +66,6 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
 	IOQueueConfig.EvtIoDeviceControl = VHDDEvtIoDeviceControl;
     IOQueueConfig.EvtIoRead = VHDDEvtIoRead;
     IOQueueConfig.EvtIoWrite = VHDDEvtIoWrite;
-	IOQueueConfig.EvtIoInternalDeviceControl = VHDDEvtIoInternalDeviceControl;
 
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&QueueAttributes, QUEUE_EXTENSION);
 	if(!NT_SUCCESS(status = WdfIoQueueCreate(Device, &IOQueueConfig, &QueueAttributes, &Queue)))
@@ -102,6 +81,7 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
         (PWSTR) &pDeviceExtension->DriveLetterBuffer;
     pDeviceExtension->DiskRegInfo.DriveLetter.MaximumLength =
         sizeof(pDeviceExtension->DriveLetterBuffer);
+
     VHDDQueryDiskRegParameters(WdfDriverGetRegistryPath(WdfDeviceGetDriver(Device)),&pDeviceExtension->DiskRegInfo);
 
     pDeviceExtension->DiskImage = ExAllocatePoolWithTag(
@@ -109,28 +89,13 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
         pDeviceExtension->DiskRegInfo.DiskSize,
         VHDD_TAG
         );
-	
+	pDeviceExtension->DiskImage != NULL ? DbgPrint("\n\n\t\tSUCCESSFULLY ALLOCATED\n\n") : DbgPrint("\n\n\t\tALLOCATED ERROR\n\n");
     if (pDeviceExtension->DiskImage) {
 		
         UNICODE_STRING deviceName;
         UNICODE_STRING win32Name;
 
-		RtlZeroMemory(pDeviceExtension->DiskImage, pDeviceExtension->DiskRegInfo.DiskSize);
-
-	pDeviceExtension->DiskGeometry.BytesPerSector = 512;
-    pDeviceExtension->DiskGeometry.SectorsPerTrack = 32;
-    pDeviceExtension->DiskGeometry.TracksPerCylinder = 2;   
-    pDeviceExtension->DiskGeometry.Cylinders.QuadPart = pDeviceExtension->DiskRegInfo.DiskSize / 512 / 32 / 2;
-	pDeviceExtension->DiskGeometry.MediaType = VHDD_MEDIA_TYPE;
-
-	pDeviceExtension->Partition.StartingOffset.QuadPart = 0;
-	pDeviceExtension->Partition.PartitionLength.QuadPart = DEFAULT_DISK_SIZE;
-	pDeviceExtension->Partition.HiddenSectors = 0;
-	pDeviceExtension->Partition.PartitionNumber = 0;
-	pDeviceExtension->Partition.PartitionType = PARTITION_ENTRY_UNUSED;
-	pDeviceExtension->Partition.BootIndicator = FALSE;
-	pDeviceExtension->Partition.RecognizedPartition = FALSE;
-	pDeviceExtension->Partition.RewritePartition = FALSE;
+		VHDDFormatDisk(pDeviceExtension);
 
         status = STATUS_SUCCESS;
 
@@ -151,8 +116,6 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
                                              &pDeviceExtension->SymbolicLink);
     }
 
-	WdfControlFinishInitializing(Device);
-
 	return status;
 }
 VOID
@@ -163,7 +126,7 @@ VHDDQueryDiskRegParameters(
 
 {
 
-    RTL_QUERY_REGISTRY_TABLE rtlQueryRegTable[5 + 1];  // Need 1 for NULL
+    RTL_QUERY_REGISTRY_TABLE rtlQueryRegTable[5 + 1];  // + 1 для NULL
     NTSTATUS                 Status;
     DISK_INFO                defDiskRegInfo;
 
@@ -230,9 +193,9 @@ VHDDQueryDiskRegParameters(
         RtlCopyUnicodeString(&DiskRegInfo->DriveLetter, &defDiskRegInfo.DriveLetter);
     }
 
-    DbgPrint("DiskSize          = 0x%lx\n", DiskRegInfo->DiskSize);
-    DbgPrint("RootDirEntries    = 0x%lx\n", DiskRegInfo->RootDirEntries);
-    DbgPrint("SectorsPerCluster = 0x%lx\n", DiskRegInfo->SectorsPerCluster);
+    DbgPrint("DiskSize          = 0x%lx (%ld)\n", DiskRegInfo->DiskSize, DiskRegInfo->DiskSize);
+    DbgPrint("RootDirEntries    = 0x%lx (%ld)\n", DiskRegInfo->RootDirEntries, DiskRegInfo->RootDirEntries);
+    DbgPrint("SectorsPerCluster = 0x%lx (%ld)\n", DiskRegInfo->SectorsPerCluster, DiskRegInfo->SectorsPerCluster);
     DbgPrint("DriveLetter       = %wZ\n",   &(DiskRegInfo->DriveLetter));
 
     return;
@@ -267,31 +230,44 @@ VOID VHDDEvtIoDeviceControl (
 
     UNREFERENCED_PARAMETER(OutputBufferLength);
     UNREFERENCED_PARAMETER(InputBufferLength);
-	
+	//обработка IOCTL запросов
 	switch (IoControlCode) {
+		//установить hotplug конфигурацию
 	case IOCTL_STORAGE_SET_HOTPLUG_INFO:
 		DbgPrint("IOCTL_STORAGE_SET_HOTPLUG_INFO");
 		break;
+		//получить hotplug конфигурацию
 	case IOCTL_STORAGE_GET_HOTPLUG_INFO:
 		DbgPrint("IOCTL_STORAGE_GET_HOTPLUG_INFO");
 		break;
+		//вернуть свойства запоминающего устройства
 	case IOCTL_STORAGE_QUERY_PROPERTY:
 		DbgPrint("IOCTL_STORAGE_QUERY_PROPERTY");
 		break;
 		//сообщить о типе, размере и природе раздела диска.
 	case IOCTL_DISK_GET_PARTITION_INFO:{
-			
-			PPARTITION_INFORMATION outputBuffer;
+
+            PPARTITION_INFORMATION outputBuffer;
+            PBOOT_SECTOR bootSector = (PBOOT_SECTOR) devExt->DiskImage;
+
+            information = sizeof(PARTITION_INFORMATION);
 			DbgPrint("IOCTL_DISK_GET_PARTITION_INFO");
-			Status = WdfRequestRetrieveOutputBuffer(Request, sizeof(PARTITION_INFORMATION), &outputBuffer, &bufSize);
-			if(NT_SUCCESS(Status) ) {
-				
-				RtlCopyMemory(outputBuffer, &(devExt->Partition), sizeof(PARTITION_INFORMATION));
-				Status = STATUS_SUCCESS;
-			
-			}
-		}
-		break;
+            Status = WdfRequestRetrieveOutputBuffer(Request, sizeof(PARTITION_INFORMATION), &outputBuffer, &bufSize);
+            if(NT_SUCCESS(Status) ) {
+
+                outputBuffer->PartitionType = PARTITION_FAT_16;
+                outputBuffer->BootIndicator       = FALSE;
+                outputBuffer->RecognizedPartition = TRUE;
+                outputBuffer->RewritePartition    = FALSE;
+                outputBuffer->StartingOffset.QuadPart = 0;
+                outputBuffer->PartitionLength.QuadPart = devExt->DiskRegInfo.DiskSize;
+                outputBuffer->HiddenSectors       = (ULONG) (1L);
+                outputBuffer->PartitionNumber     = (ULONG) (-1L);
+
+                Status = STATUS_SUCCESS;
+            }
+        }
+        break;
 		//изменить тип раздела
 	case IOCTL_DISK_GET_PARTITION_INFO_EX:
 		DbgPrint("IOCTL_DISK_GET_PARTITION_INFO_EX");
@@ -311,28 +287,22 @@ VOID VHDDEvtIoDeviceControl (
 		break;
 	case IOCTL_MOUNTMGR_QUERY_POINTS: // сообщить о символической ссылке для тома 
 		DbgPrint("IOCTL_MOUNTMGR_QUERY_POINTS"); 
-		Status = STATUS_INVALID_DEVICE_REQUEST; 
 		break; 
 		//получить размер диска
-	case IOCTL_DISK_GET_LENGTH_INFO:	{
-			
-			PGET_LENGTH_INFORMATION outputBuffer;
-			GET_LENGTH_INFORMATION  size;
-			size.Length.QuadPart = DEFAULT_DISK_SIZE;
-			DbgPrint("IOCTL_DISK_GET_LENGTH_INFO");
-			Status = WdfRequestRetrieveOutputBuffer(Request, sizeof(GET_LENGTH_INFORMATION), &outputBuffer, &bufSize);
-			if(NT_SUCCESS(Status) ) {
-				
-				RtlCopyMemory(outputBuffer, &size, sizeof(GET_LENGTH_INFORMATION));
-				Status = STATUS_SUCCESS;
-			
-			}
-		}
+	case IOCTL_DISK_GET_LENGTH_INFO:
+		DbgPrint("IOCTL_DISK_GET_LENGTH_INFO");
+		break;
+		//получить ссылочное имя
+	case IOCTL_MOUNTDEV_QUERY_DEVICE_NAME:
+		DbgPrint("IOCTL_MOUNTDEV_QUERY_DEVICE_NAME");
+		break;
+		//вернуть физическое месторасположение одного или более дисков
+	case IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS:
+		DbgPrint("IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS");
 		break;
 		//сообщить о геометрии диска (количество цилиндров, дорожек, секторов)
 	case IOCTL_DISK_GET_MEDIA_TYPES:
     case IOCTL_DISK_GET_DRIVE_GEOMETRY:  {
-
             PDISK_GEOMETRY outputBuffer;
             information = sizeof(DISK_GEOMETRY);
 			DbgPrint("IOCTL_DISK_GET_DRIVE_GEOMETRY / IOCTL_DISK_GET_MEDIA_TYPES");
@@ -362,32 +332,6 @@ VOID VHDDEvtIoDeviceControl (
 	CheckStatus(Status);
     WdfRequestCompleteWithInformation(Request, Status, information);
 }
-VOID VHDDEvtIoInternalDeviceControl (
-    IN WDFQUEUE  Queue,
-    IN WDFREQUEST  Request,
-    IN size_t  OutputBufferLength,
-    IN size_t  InputBufferLength,
-    IN ULONG  IoControlCode
-    )
-{
-    NTSTATUS          Status = STATUS_INVALID_DEVICE_REQUEST;
-    ULONG_PTR         information = 0;
-    size_t            bufSize;
-    PDEVICE_EXTENSION devExt = QueueGetExtension(Queue)->DeviceExtension;
-
-    UNREFERENCED_PARAMETER(OutputBufferLength);
-    UNREFERENCED_PARAMETER(InputBufferLength);
-	
-	switch (IoControlCode) {
-	
-	default: DbgPrint("---------------\nVHDDEvtIoInternalDeviceControl - %x - %d\n---------------", IoControlCode, IoControlCode);
-    }
-
-	
-	CheckStatus(Status);
-    WdfRequestCompleteWithInformation(Request, Status, information);
-}
-
 VOID VHDDEvtIoRead(
 	IN WDFQUEUE  Queue,
 	IN WDFREQUEST  Request,
@@ -408,7 +352,7 @@ VOID VHDDEvtIoRead(
     WdfRequestGetParameters(Request, &Parameters);
 
     ByteOffset.QuadPart = Parameters.Parameters.Read.DeviceOffset;
-
+	DbgPrint("\tREAD OFFSET : \t %d", Parameters.Parameters.Read.DeviceOffset/4096);
         Status = WdfRequestRetrieveOutputMemory(Request, &hMemory);
         if(NT_SUCCESS(Status)){
 
@@ -440,7 +384,7 @@ VOID VHDDEvtIoWrite(
     WdfRequestGetParameters(Request, &Parameters);
 
     ByteOffset.QuadPart = Parameters.Parameters.Write.DeviceOffset;
-
+	DbgPrint("\tWRITE OFFSET : \t %d", Parameters.Parameters.Write.DeviceOffset/4096);
         Status = WdfRequestRetrieveInputMemory(Request, &hMemory);
         if(NT_SUCCESS(Status)){
 
@@ -480,10 +424,139 @@ VOID CheckStatus(NTSTATUS Status){
 			default: DbgPrint("STATUS - %x -%d", Status, Status);
 		}
 }
-/*VOID VHDDDriverUnload (
-    IN WDFDRIVER  Driver
+NTSTATUS
+VHDDFormatDisk(
+    IN PDEVICE_EXTENSION devExt
     )
 {
-	DbgPrint("VHDDDriverUnload routine");
+
+    PBOOT_SECTOR bootSector = (PBOOT_SECTOR) devExt->DiskImage;
+    PUCHAR       firstFatSector;
+    ULONG        rootDirEntries;
+    ULONG        sectorsPerCluster;
+    USHORT       fatEntries;     
+    USHORT       fatSectorCnt;   
+    PDIR_ENTRY   rootDir;        
+
+    PAGED_CODE();
+    ASSERT(sizeof(BOOT_SECTOR) == 512);
+    ASSERT(devExt->DiskImage != NULL);
+
+    RtlZeroMemory(devExt->DiskImage, devExt->DiskRegInfo.DiskSize);
+
+    devExt->DiskGeometry.BytesPerSector = 4096;
+    devExt->DiskGeometry.SectorsPerTrack = 32;     // Using VHDD value
+    devExt->DiskGeometry.TracksPerCylinder = 2;    // Using VHDD value
+
+    devExt->DiskGeometry.Cylinders.QuadPart = devExt->DiskRegInfo.DiskSize / 4096 / 32 / 2;
+
+    devExt->DiskGeometry.MediaType = VHDD_MEDIA_TYPE;
+	DbgPrint("Cylinders: %ld", devExt->DiskGeometry.Cylinders.QuadPart);
+	DbgPrint("TracksPerCylinder: %ld", devExt->DiskGeometry.TracksPerCylinder);
+	DbgPrint("SectorsPerTrack: %ld", devExt->DiskGeometry.SectorsPerTrack);
+	DbgPrint("BytesPerSector: %ld", devExt->DiskGeometry.BytesPerSector);
+
+    rootDirEntries = devExt->DiskRegInfo.RootDirEntries;
+    sectorsPerCluster = devExt->DiskRegInfo.SectorsPerCluster;
+
+
+    if (rootDirEntries & (DIR_ENTRIES_PER_SECTOR - 1)) {
+
+        rootDirEntries = (rootDirEntries + (DIR_ENTRIES_PER_SECTOR - 1)) & ~ (DIR_ENTRIES_PER_SECTOR - 1);
+    }
+
+    DbgPrint("Root dir entries: %ld\nSectors/cluster: %ld\n",
+        rootDirEntries, sectorsPerCluster
+        );
+
+    bootSector->bsJump[0] = 0xeb;
+    bootSector->bsJump[1] = 0x3c;
+    bootSector->bsJump[2] = 0x90;
+
+    bootSector->bsOemName[0] = 'J';
+    bootSector->bsOemName[1] = 'e';
+    bootSector->bsOemName[2] = 'r';
+    bootSector->bsOemName[3] = 'o';
+    bootSector->bsOemName[4] = 'n';
+    bootSector->bsOemName[5] = 'i';
+    bootSector->bsOemName[6] = 'm';
+    bootSector->bsOemName[7] = 'o';
+
+    bootSector->bsBytesPerSec = (SHORT)devExt->DiskGeometry.BytesPerSector;
+    bootSector->bsResSectors  = 1;
+    bootSector->bsFATs        = 1;
+    bootSector->bsRootDirEnts = (USHORT)rootDirEntries;
+
+    bootSector->bsSectors     = (USHORT)(devExt->DiskRegInfo.DiskSize /
+                                         devExt->DiskGeometry.BytesPerSector);
+    bootSector->bsMedia       = (UCHAR)devExt->DiskGeometry.MediaType;
+    bootSector->bsSecPerClus  = (UCHAR)sectorsPerCluster;
+
+    fatEntries = (bootSector->bsSectors - bootSector->bsResSectors -
+				bootSector->bsRootDirEnts / DIR_ENTRIES_PER_SECTOR) /
+                bootSector->bsSecPerClus + 2;
+
+
+        fatSectorCnt = (fatEntries * 2 + 511) / 512;
+        fatEntries   = fatEntries + fatSectorCnt;
+        fatSectorCnt = (fatEntries * 2 + 511) / 512;
+
+    bootSector->bsFATsecs       = fatSectorCnt;
+    bootSector->bsSecPerTrack   = (USHORT)devExt->DiskGeometry.SectorsPerTrack;
+    bootSector->bsHeads         = (USHORT)devExt->DiskGeometry.TracksPerCylinder;
+    bootSector->bsBootSignature = 0x29;
+    bootSector->bsVolumeID      = 0x12345678;
+
+    bootSector->bsLabel[0]  = 'V';
+    bootSector->bsLabel[1]  = 'i';
+    bootSector->bsLabel[2]  = 'r';
+    bootSector->bsLabel[3]  = 't';
+    bootSector->bsLabel[4]  = 'u';
+    bootSector->bsLabel[5]  = 'a';
+    bootSector->bsLabel[6]  = 'l';
+    bootSector->bsLabel[7]  = ' ';
+    bootSector->bsLabel[8]  = 'H';
+    bootSector->bsLabel[9]  = 'D';
+    bootSector->bsLabel[10] = 'D';
+
+    bootSector->bsFileSystemType[0] = 'F';
+    bootSector->bsFileSystemType[1] = 'A';
+    bootSector->bsFileSystemType[2] = 'T';
+    bootSector->bsFileSystemType[3] = '1';
+    bootSector->bsFileSystemType[4] = '6';
+    bootSector->bsFileSystemType[5] = ' ';
+    bootSector->bsFileSystemType[6] = ' ';
+    bootSector->bsFileSystemType[7] = ' ';
+	
+
+    bootSector->bsSig2[0] = 0x55;
+    bootSector->bsSig2[1] = 0xAA;
+
+    firstFatSector    = (PUCHAR)(bootSector + 1);
+    firstFatSector[0] = (UCHAR)devExt->DiskGeometry.MediaType;
+    firstFatSector[1] = 0xFF;
+    firstFatSector[2] = 0xFF;
+
+
+    firstFatSector[3] = 0xFF;
+
+    rootDir = (PDIR_ENTRY)(bootSector + 1 + fatSectorCnt);
+
+    rootDir->deName[0] = 'V';
+    rootDir->deName[1] = 'I';
+    rootDir->deName[2] = 'R';
+    rootDir->deName[3] = 'T';
+    rootDir->deName[4] = 'U';
+    rootDir->deName[5] = 'A';
+    rootDir->deName[6] = 'L';
+    rootDir->deName[7] = ' ';
+
+    rootDir->deExtension[0] = 'H';
+    rootDir->deExtension[1] = 'D';
+    rootDir->deExtension[2] = 'D';
+
+    rootDir->deAttributes = DIR_ATTR_VOLUME;
+
+	DbgPrint("FILE SYSTEM : FAT16");
+    return STATUS_SUCCESS;
 }
-*/
