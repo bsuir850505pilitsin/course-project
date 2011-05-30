@@ -39,6 +39,7 @@ Addreg=VHDDClassReg
 ;HKR - context partition of system register
 [VHDDClassReg]
 HKR,,,0,%ClassName%
+HKR,,Icon,,-32
 
 ;Win2K
 [VHDD]
@@ -81,7 +82,7 @@ HKR, "Parameters", "RootDirEntries",    %REG_DWORD%, 0x00000200
 HKR, "Parameters", "SectorsPerCluster", %REG_DWORD%, 0x00000002
 
 [Strings]
-ProviderName	= "Jeronimo inc."
+ProviderName	= "Pilitsin"
 ClassName		= "Disk drives"
 VHDDDriverDesc	= "Virtual Hard Disk Drive"
 VHDDServiceDesc	= "Virtual HDD Driver"

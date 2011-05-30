@@ -3,8 +3,10 @@
 
 #include <ntddk.h>
 #include <ntddvol.h>
+#include <portcls.h>
 #include <ntdddisk.h>
 #include <wdf.h>
+#include <windef.h>
 #include <ntstrsafe.h>
 #include <wdfroletypes.h>
 #include <ntddstor.h>
@@ -12,7 +14,7 @@
 #include <mountmgr.h>
 #define NT_DEVICE_NAME                  L"\\Device\\VHDD"
 #define DOS_DEVICE_NAME                 L"\\DosDevices\\"
-#define MOUNTDEV_LINK_NAME				L"\\DosDevices\\V:"
+
 #define VHDD_TAG						'DDHV'
 #define DOS_DEVNAME_LENGTH              (sizeof(DOS_DEVICE_NAME)+sizeof(WCHAR)*10)
 #define DRIVE_LETTER_LENGTH             (sizeof(WCHAR)*10)
@@ -24,9 +26,11 @@
 #define DIR_ENTRIES_PER_SECTOR          16
 
 #define DEFAULT_DISK_SIZE               (128*1024*1024)			//стандартный размер
+#define DEFAULT_BYTES_PER_SECTOR		4096
 #define DEFAULT_ROOT_DIR_ENTRIES        512						//максимальное количество файлов в корневом каталоге
 #define DEFAULT_SECTORS_PER_CLUSTER     2
 #define DEFAULT_DRIVE_LETTER            L"V:"					//Буква диска
+#define DISK_IMAGE_SIZE					DEFAULT_DISK_SIZE/DEFAULT_BYTES_PER_SECTOR
 
 typedef struct _DISK_INFO {
     ULONG					DiskSize;           // Размер диска в байтах
@@ -36,7 +40,7 @@ typedef struct _DISK_INFO {
 } DISK_INFO, *PDISK_INFO;
 
 typedef struct _DEVICE_EXTENSION{
-    PUCHAR					DiskImage;                  // Указатель на начало образа диска
+    PVOID					DiskImage[DISK_IMAGE_SIZE];                  // Указатель на начало образа диска
     DISK_GEOMETRY			DiskGeometry;               // Параметры диска
     DISK_INFO				DiskRegInfo;                // Параметры диска (реестр)
     UNICODE_STRING			SymbolicLink;               // Символическое имя диска
