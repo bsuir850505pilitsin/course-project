@@ -1,6 +1,8 @@
 
 #ifndef _COMPRESS_H
 #define _COMPRESS_H
+#include <Wdm.h>
+#include <Ntddk.h>
 
 #define RIGHT 1
 #define LEFT 0
@@ -9,34 +11,34 @@
 структуры данных используемые при кодировании/декодировании
 ***********************************************************************************/
 ///структура данных с информацией о повторении значения в массиве
-struct character{
-	char	value;	//значение встречающееся в кодируемом массиве
-	short	num;	//количество повторений данного значения
+typedef struct character{
+	UCHAR	value;	//значение встречающееся в кодируемом массиве
+	USHORT	num;	//количество повторений данного значения
 };
 ///структура данных представляющая из себя ветвь дерева
-struct tree{
+typedef struct tree{
 	struct character* ch;	//указатель на структуру с данными о повторении значения
 	struct tree* left;		//указатель на левую ветвь
 	struct tree* right;		//указатель на правую ветвь
 };
 ///структура данных содержащая код кодируемого значения
-struct code{
-	unsigned short n_bit;	//количество значащих бит
-	unsigned short bit_code;//код
+typedef struct code{
+	USHORT n_bit;			//количество значащих бит
+	USHORT bit_code;		//код
 };
 ///структура данных содержащая информацию о значении и коде, которым оно кодируется
-struct dictionary{
+typedef struct dictionary{
 	struct character* ch;	//указатель на структуру данных с информацией о повторении значения
 	struct code* cd;		//указатель на структуру данных содержащую код
 };
 ///структура данных содержащая основные параметры пакета данных
-struct packageData{
-	unsigned short	compressedSize;		//размер сжатых данных
-	unsigned short	decompressedSize;	//исходный размер
-	char	numOfSymbolsInDictionary;	//количество значений в словаре
-	char	nullBitsInLastByte;			//количество не значащих бит в крайнем байте
-	unsigned short	dictionaryOffset;	//смещение словаря в пакете
-	unsigned short	dataOffset;			//смещение сжатых данных в пакете
+typedef struct packageData{
+	USHORT	compressedSize;				//размер сжатых данных
+	USHORT	decompressedSize;			//исходный размер
+	USHORT	numOfSymbolsInDictionary;	//количество значений в словаре
+	USHORT	nullBitsInLastByte;			//количество не значащих бит в крайнем байте
+	USHORT	dictionaryOffset;			//смещение словаря в пакете
+	USHORT	dataOffset;					//смещение сжатых данных в пакете
 };
 
 /***********************************************************************************
@@ -50,14 +52,14 @@ struct packageData{
 	data - указатель на массив сжимаемых данных
 	size - размер сжимаемого массива
 **/
-void* compress(void* data, unsigned int size);
+PVOID compress(PVOID data, USHORT size);
 /**
 	decompress() функция осуществляющая вызов функций для подготовки к декомпрессии данных и саму декомпрессию
 	возвращает указатель на восстановленые данные
 	принимаемые значения:
 	data - указатель на пакет данных
 **/
-void* decompress(void* data);
+PVOID decompress(PVOID data);
 
 /***********************************************************************************
 	функции выполняющие промежуточные действия при кодировании/декодировании данных
@@ -66,7 +68,7 @@ void* decompress(void* data);
 /**
 	myMalloc() "обертка" для функции выделения памяти
 **/
-void* myMalloc(int size);
+PVOID myMalloc(int size);
 /**
 	myFree() "обертка" для функции удаления выделенного участка памяти
 **/
@@ -77,7 +79,7 @@ void myFree(void *mem);
 	принимаемые значения:
 	input - указатель на пакет данных
 **/
-struct packageData getPackageData(void* input);
+struct packageData getPackageData(PVOID input);
 /**	
 	pass0() считает количество повторений символов, создает массив только из встречающихся символов и сортирует его по убыванию
 	функция возвращает указатель на массив структур character (в котором содержатся символы, встречающиеся в сжимаемом массиве, и 
@@ -87,7 +89,7 @@ struct packageData getPackageData(void* input);
 	size - размер массива сжимаемых данных
 	v_size - указатель по которому записывается размер возвращаемого массива
 **/
-struct character* pass0(void* data, unsigned int size, unsigned int *v_size);
+struct character* pass0(PVOID data, USHORT size, PUSHORT v_size);
 /**
 	createTree() создает дерево для кодирования алгоритмом Хаффмана
 	функция возвращает указатель на вершину дерева
@@ -95,7 +97,7 @@ struct character* pass0(void* data, unsigned int size, unsigned int *v_size);
 	values - массив структур character с символами и их количеством в сжимаемом массиве
 	v_size - количество элементов в массиве values
 **/
-struct tree* createTree(struct character* values, unsigned int v_size);
+struct tree* createTree(struct character* values, USHORT v_size);
 /** 
 	searchCharInTree() рекурсивная функция поиска значения в дереве, используется при создании словаря
 	функция возвращает значение 1 если найдено искомое значение, иначе 0
@@ -104,7 +106,7 @@ struct tree* createTree(struct character* values, unsigned int v_size);
 	data - искомое значение
 	code - указатель на изменяемую структуру code в которую заносится количество значащих битов и код которым кодируется data 
 **/
-int searchCharInTree(struct tree* root, char data, struct code* code);
+int searchCharInTree(struct tree* root, UCHAR data, struct code* code);
 /** 
 	createDictionary() создание словаря по дереву, используется только при кодировании в целях исключения множественного прохождения по дереву
 	функция вовзращает указатель на массив указателей на структуры dictionary, в которых содержится информация о кодируемом значении и сам код
@@ -113,7 +115,7 @@ int searchCharInTree(struct tree* root, char data, struct code* code);
 	values - массив кодируемых значений
 	v_size - размер массива values
 **/
-struct dictionary** createDictionary(struct tree* root, struct character* values, unsigned int v_size);
+struct dictionary** createDictionary(struct tree* root, struct character* values, USHORT v_size);
 /**
 	getCharIndex() поиск символа в в словаре
 	возвращает индекс элемента массива структур dictionary, в котором содержатся данные об искомом значении
@@ -122,7 +124,7 @@ struct dictionary** createDictionary(struct tree* root, struct character* values
 	dict - словарь, в котором осуществляется поиск
 	v_size - размер словаря
 **/
-int getCharIndex(char data, struct dictionary** dict, unsigned int v_size);
+USHORT getCharIndex(UCHAR data, struct dictionary** dict, USHORT v_size);
 /** 
 	pass1() сжатие входных данных и формирование пакета данных (представляющего из себя сжатые данные и данные для декомпрессии)
 	возвращает указатель на пакет данных 
@@ -132,6 +134,5 @@ int getCharIndex(char data, struct dictionary** dict, unsigned int v_size);
 	dict - словарь применяемый при сжатии
 	v_size - размер словаря
 **/
-char* pass1(void* i_data, unsigned int size, struct dictionary** dict, unsigned int v_size);
-
+PUCHAR pass1(PVOID i_data, USHORT size, struct dictionary** dict, USHORT v_size);
 #endif

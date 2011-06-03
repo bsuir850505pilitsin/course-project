@@ -1,58 +1,79 @@
 #include "compress.h"
-
-void* compress(void* data, unsigned int size){
+#ifdef ALLOC_PRAGMA_1
+#pragma alloc_text(PAGE, compress)
+#pragma alloc_text(PAGE, decompress)
+#pragma alloc_text(PAGE, myMalloc)
+#pragma alloc_text(PAGE, myFree)
+#pragma alloc_text(PAGE, getPackageData)
+#pragma alloc_text(PAGE, pass0)
+#pragma alloc_text(PAGE, createTree)
+#pragma alloc_text(PAGE, searchCharInTree)
+#pragma alloc_text(PAGE, createDictionary)
+#pragma alloc_text(PAGE, getCharIndex)
+#pragma alloc_text(PAGE, pass1)
+#endif
+PVOID compress(PVOID data, USHORT size){
 	struct character* values;
 	struct tree* root;
 	struct dictionary **dict;
-	char *c_data;
-	int i;
-	unsigned v_size = 0;
+	PUCHAR c_data;
+	USHORT i;
+	USHORT v_size = 0;
+	PAGED_CODE();
 
 	values = pass0(data, size, &v_size);
-
 	root = createTree(values, v_size);
-
 	dict = createDictionary(root, values, v_size);
-	
 	c_data = pass1(data, size, dict, v_size);
-	
-	printPackageInfoAndData(getPackageData((void*)c_data), (void*)c_data);
-
-	myFree((void*) values);
-	myFree((void*) root);
+	getPackageData((PVOID)c_data);
 	for(i = 0; i < v_size; i++){
-		myFree((void*)dict[i]);
+		myFree((PVOID)(dict[i]));
 	}
-	myFree((void*)dict);
-return (void*)c_data; 
+	myFree((PVOID)dict);
+	myFree((PVOID) values);
+	myFree((PVOID) root);
+	myFree(data);
+return (PVOID)c_data; 
 }
 
-void* decompress(void* data){
+PVOID decompress(const PVOID data){
 	struct character* values;
 	struct tree* root;
 	struct tree* temp;
 	struct packageData inf;
-	char* d_data;
-	char* c_data;
-	unsigned int v_size;
-	unsigned int n_bit;
-	unsigned int i_index, o_index;
-	int i;
-	c_data = (char*)data;
-	inf = getPackageData((void*)c_data);
-	d_data = (char*)myMalloc(inf.decompressedSize * sizeof(char));
-	
+	PUCHAR d_data;
+	PUCHAR c_data;
+	USHORT v_size;
+	USHORT n_bit;
+	USHORT i_index, o_index;
+	USHORT i;
+	PAGED_CODE();
+
+	c_data = (PUCHAR)data;
+	inf = getPackageData((PVOID)c_data);
+	d_data = (PUCHAR)myMalloc(inf.decompressedSize * sizeof(UCHAR));
+	DbgPrint("<mark%d>", 1);
 	v_size = inf.numOfSymbolsInDictionary;
 	//создание массива с данными о кодированных символах и их количестве в кодированном массиве
 	values = (struct character*)myMalloc(v_size * sizeof(struct character));
+	DbgPrint("<mark%d>", 2);
 	for(i = 0; i < v_size; i++){
-		values[i].value = c_data[inf.dictionaryOffset + i*(sizeof(unsigned short)+sizeof(char))]; 
-		values[i].num = *(unsigned short*)(c_data + inf.dictionaryOffset + i*(sizeof(unsigned short)+ sizeof(char))  + sizeof(char));
+		values[i].value = c_data[inf.dictionaryOffset + i*(sizeof(USHORT)+sizeof(UCHAR))]; 
+		values[i].num = *(PUSHORT)(c_data + inf.dictionaryOffset + i*(sizeof(USHORT)+ sizeof(UCHAR))  + sizeof(UCHAR));
 	}
+	DbgPrint("<mark%d>", 3);
+	if(v_size == 1){
+		for(i = 0; i < inf.decompressedSize; i++){
+			d_data[i] = values[0].value;
+		}
+		myFree((PVOID)values);
+		return (PVOID)d_data;
+	}
+	DbgPrint("<mark%d>", 4);
 	//создание дерева
 	root = createTree(values, v_size);
 	//декомпрессия данных
-	for(i_index = 0, o_index = 0, temp = root; i_index < inf.compressedSize; i_index++){
+	for(i_index = 0, o_index = 0, temp = root; i_index <= inf.compressedSize; i_index++){
 		for(n_bit = 0; n_bit < 8; n_bit++){
 			if(temp->left != NULL && temp->right != NULL){
 				if(((c_data[i_index + inf.dataOffset] << n_bit)&128 ? RIGHT : LEFT) == RIGHT) {
@@ -71,44 +92,58 @@ void* decompress(void* data){
 				
 		}
 	}
-	myFree((void*)root);
-	myFree((void*)values);
-
-	return (void*)d_data;
+	DbgPrint("<mark%d>", 5);
+	myFree((PVOID)root);
+	myFree((PVOID)values);
+	//myFree(data);
+	return (PVOID)d_data;
 }
 
-void* myMalloc(int size){
-return calloc(size, 1);
+PVOID myMalloc(int size){
+	PVOID temp;
+	PAGED_CODE();
+
+		temp = ExAllocatePool( NonPagedPool, size);
+		if(temp == NULL) DbgPrint("ERROR ALLOCATING POOL FOR (DE)COMPRESSING");
+		RtlZeroMemory(temp, size);
+return temp;
 }
 
 void myFree(void *mem){
-	free(mem);
+	PAGED_CODE();
+
+	ExFreePool(mem);
 }
 
-struct packageData getPackageData(void* input){
-	char *data;
+struct packageData getPackageData(PVOID input){
+	PUCHAR data;
 	struct packageData inf;
-	data = (char*)input;
+	PAGED_CODE();
 
-	inf.compressedSize = *(unsigned short*)(data);
-	inf.decompressedSize = *(unsigned short*)(data + sizeof(unsigned short)); 
-	inf.numOfSymbolsInDictionary = data[2*sizeof(unsigned short)]; 
-	inf.nullBitsInLastByte = data[2*sizeof(unsigned short) + sizeof(char)];
-	inf.dictionaryOffset = 2*sizeof(unsigned short) + 2*sizeof(char);
-	inf.dataOffset = 2*sizeof(unsigned short) + 2*sizeof(char) + inf.numOfSymbolsInDictionary*(sizeof(unsigned short) + sizeof(char));
+	data = (PUCHAR)input;
+
+	inf.compressedSize = *(PUSHORT)(data);
+	inf.decompressedSize = *(PUSHORT)(data + sizeof(USHORT)); 
+	inf.numOfSymbolsInDictionary = (UCHAR)data[2*sizeof(USHORT)]; 
+	inf.nullBitsInLastByte = (UCHAR)data[2*sizeof(USHORT) + sizeof(UCHAR)];
+	inf.dictionaryOffset = (USHORT)(2*sizeof(USHORT) + 2*sizeof(UCHAR));
+	inf.dataOffset = (USHORT)(inf.dictionaryOffset + (inf.numOfSymbolsInDictionary+1)*(sizeof(USHORT) + sizeof(UCHAR)));
+	DbgPrint("%d - %d - %d - %d - %d - %d", (USHORT)inf.compressedSize, (USHORT)inf.decompressedSize, (UCHAR)inf.numOfSymbolsInDictionary, (UCHAR)inf.nullBitsInLastByte, (USHORT)inf.dictionaryOffset, (USHORT)inf.dataOffset);
 return inf;
 }
 
-struct character* pass0(void* data, unsigned int size, unsigned int *v_size){
+struct character* pass0(PVOID data, USHORT size, PUSHORT v_size){
 	struct character* temp;
 	struct character *values;
-	int i, n;
-	char* dat = (char*)data;
+	USHORT i, n;
+	PUCHAR dat = (PUCHAR)data;
+	PAGED_CODE();
+
 	values = (struct character*)myMalloc(256 * sizeof(struct character));
-	for(i = 0; i < 256; i++) { values[i].value = (char)i; values[i].num = 0; }
+	for(i = 0; i < 256; i++) { values[i].value = (UCHAR)i; values[i].num = 0; }
 	//считаем количество повторений каждого символа
 	for(i = 0; i < size; i++) {
-		n = (unsigned char)dat[i];
+		n = (UCHAR)dat[i];
 		values[n].num++;
 	}
 	//считаем количество повторяющихся символов
@@ -119,10 +154,10 @@ struct character* pass0(void* data, unsigned int size, unsigned int *v_size){
 	temp = (struct character*)myMalloc(n * sizeof(struct character));
 	*v_size = n;
 	for(i = 0, n = 0; i < 256; i++){
-		int j = 0;
+		USHORT j = 0;
 		if(values[i].num == 0) continue;
 		else{
-			int k;
+			USHORT k;
 			while(values[i].num <= temp[j].num){
 				if(j < *v_size - 1) j++;
 				else break;
@@ -139,14 +174,16 @@ struct character* pass0(void* data, unsigned int size, unsigned int *v_size){
 			n++;
 		}
 	}
-	myFree((void*)values);
+	myFree((PVOID)values);
 return temp;
 }
 
-struct tree* createTree(struct character* values, unsigned int v_size){
+struct tree* createTree(struct character* values, USHORT v_size){
 	struct tree* root;
 	struct tree** list;
-	unsigned int index, l_size;
+	USHORT index, l_size;
+	PAGED_CODE();
+
 	list = (struct tree**)myMalloc(v_size*sizeof(struct tree*));
 	l_size = v_size;
 
@@ -196,11 +233,13 @@ struct tree* createTree(struct character* values, unsigned int v_size){
 		if(list[0]->right) list[0]->ch->num += list[0]->right->ch->num;
 	}
 	root = list[0];
-	myFree((void*)list);
+	myFree((PVOID)list);
 return root;
 }
 
-int searchCharInTree(struct tree* root, char data, struct code* code){
+int searchCharInTree(struct tree* root, UCHAR data, struct code* code){
+	PAGED_CODE();
+
 	if(root->right)	if(searchCharInTree(root->right, data, code)){
 			code->bit_code >>= 1;
 			code->bit_code = code->bit_code|RIGHT*128;
@@ -217,9 +256,11 @@ int searchCharInTree(struct tree* root, char data, struct code* code){
 return 0;
 }
 
-struct dictionary** createDictionary(struct tree* root, struct character* values, unsigned int v_size){
+struct dictionary** createDictionary(struct tree* root, struct character* values, USHORT v_size){
 	struct dictionary** dict;
-	unsigned int index;
+	USHORT index;
+	PAGED_CODE();
+
 	dict = (struct dictionary**)myMalloc(v_size*sizeof(struct dictionary*));
 	for(index = 0; index < v_size; index++){
 		int i;
@@ -231,26 +272,29 @@ struct dictionary** createDictionary(struct tree* root, struct character* values
 return dict;
 }
 
-int getCharIndex(char data, struct dictionary** dict, unsigned int v_size){
-	int i;
+USHORT getCharIndex(UCHAR data, struct dictionary** dict, USHORT v_size){
+	USHORT i;
+	PAGED_CODE();
+
 	for(i = 0; i < v_size; i++){
 		if( dict[i]->ch->value == data ) return i;
 	}
 return v_size + 1;
 }
 
-char* pass1(void* i_data, unsigned int size, struct dictionary** dict, unsigned int v_size){
-	char *c_data;
-	char *data;
-	unsigned int i_index, o_index, index_bit, code_bit, outbyte_bit, char_index;
+PUCHAR pass1(PVOID i_data, USHORT size, struct dictionary** dict, USHORT v_size){
+	PUCHAR c_data;
+	PUCHAR data;
+	USHORT i_index, o_index, index_bit, code_bit, outbyte_bit, UCHAR_index;
+	PAGED_CODE();
 
-	data = (char*)i_data;
-	c_data = (char*)myMalloc(size*sizeof(char));
+	data = (PUCHAR)i_data;
+	c_data = (PUCHAR)myMalloc(size*sizeof(UCHAR));
 	
 	for(i_index = 0, o_index = 0, outbyte_bit = 0; i_index < size; i_index++){
-		char_index = getCharIndex(data[i_index] , dict,  v_size);
-		for(code_bit = 0; code_bit < dict[char_index]->cd->n_bit; code_bit++ ){
-				c_data[o_index] = c_data[o_index] | (((dict[char_index]->cd->bit_code << code_bit ) & 128)? RIGHT : LEFT );
+		UCHAR_index = getCharIndex(data[i_index] , dict,  v_size);
+		for(code_bit = 0; code_bit < dict[UCHAR_index]->cd->n_bit; code_bit++ ){
+				c_data[o_index] = c_data[o_index] | (((dict[UCHAR_index]->cd->bit_code << code_bit ) & 128)? RIGHT : LEFT );
 				if(outbyte_bit != 7){
 					c_data[o_index] <<= 1;
 					outbyte_bit++;
@@ -267,33 +311,32 @@ char* pass1(void* i_data, unsigned int size, struct dictionary** dict, unsigned 
 	}
 	//создание пакета данных
 	{
-		char *temp;
-		int dict_offset, data_offset, dict_size, full_size;
-		unsigned short *c_size, *d_size;
+		PUCHAR temp;
+		unsigned dict_offset, data_offset, dict_size, full_size;
+		PUSHORT c_size, d_size;
 
-		dict_offset = sizeof(unsigned short) + sizeof(unsigned short) + sizeof(char) + sizeof(char);
-		dict_size = v_size * (sizeof(char) + sizeof(unsigned short));
+		dict_offset = sizeof(USHORT) + sizeof(USHORT) + sizeof(UCHAR) + sizeof(UCHAR);
+		dict_size = v_size * (sizeof(UCHAR) + sizeof(USHORT));
 		data_offset = dict_offset + dict_size;
 		full_size = data_offset + o_index;
-		temp = (char*)myMalloc(full_size);
-
+		temp = (PUCHAR)myMalloc(full_size);
 		
-		c_size = (unsigned short*)temp;
-		d_size = (unsigned short*)(temp + sizeof(unsigned short));
-		*c_size = o_index;	//размер сжатых данных
-		*d_size = size;		//исходный размер
-		temp[sizeof(unsigned short) + sizeof(unsigned short)] = (char)v_size; //количество элементов в словаре
-		temp[sizeof(unsigned short) + sizeof(unsigned short) + sizeof(char)] = (char)outbyte_bit; //количество пустых бит в крайнем байте
-
+		c_size = (PUSHORT)temp;
+		d_size = (PUSHORT)(temp + sizeof(USHORT));
+		*c_size = (USHORT)o_index;	//размер сжатых данных
+		*d_size = (USHORT)size;		//исходный размер
+		temp[sizeof(USHORT) + sizeof(USHORT)] = (UCHAR)(v_size - 1); //количество элементов в словаре
+		temp[sizeof(USHORT) + sizeof(USHORT) + sizeof(UCHAR)] = (UCHAR)outbyte_bit; //количество пустых бит в крайнем байте
 		for(i_index = 0; i_index < v_size; i_index++){
-			temp[dict_offset + i_index*(sizeof(unsigned short) + sizeof(char))] = dict[i_index]->ch->value;
-			c_size = (unsigned short*)(temp + dict_offset + i_index*(sizeof(unsigned short) + sizeof(char)) + sizeof(char));
+			temp[dict_offset + i_index*(sizeof(USHORT) + sizeof(UCHAR))] = dict[i_index]->ch->value;
+			c_size = (PUSHORT)(temp + dict_offset + i_index*(sizeof(USHORT) + sizeof(UCHAR)) + sizeof(UCHAR));
 			*c_size = dict[i_index]->ch->num;
 		}
 		for(i_index = 0; i_index < o_index; i_index++){
 			temp[data_offset + i_index] = c_data[i_index];
 		}
-		myFree((void*)c_data);
+		
+		myFree((PVOID)c_data);
 		c_data = temp;
 	}
 

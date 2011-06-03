@@ -39,6 +39,7 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
 
 	DbgPrint("VHDDEvtDriverDeviceAdd routine");
 
+	//ассоциируем с нашим объектом драйвера имя
 	if(!NT_SUCCESS(status = WdfDeviceInitAssignName(DeviceInit, &DevName)))
 	{	
 		DbgPrint("return after WdfDeviceInitAssignName");
@@ -49,65 +50,73 @@ NTSTATUS VHDDEvtDriverDeviceAdd(
 	WdfDeviceInitSetExclusive(DeviceInit, FALSE);
 	WdfDeviceInitSetIoType(DeviceInit, WdfDeviceIoDirect);
 
+	//инициализируем аттрибуты устройства и "встраиваем" расширения устройства в структуру аттрибутов
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&DeviceAttributes, DEVICE_EXTENSION);
+	//"инициализируем" метод, вызываемый при завершении работы драйвера
 	DeviceAttributes.EvtCleanupCallback = VHDDEvtCleanupCallback;
 
+	//создаем объект устройства
 	if(!NT_SUCCESS(status = WdfDeviceCreate(&DeviceInit, &DeviceAttributes, &Device)))
 	{	
 		CheckStatus(status);
 		DbgPrint("return after WdfDeviceCreate");
 		return status;
 	}
+	//получаем указатель на структуру расширения устройства
 	pDeviceExtension = DeviceGetExtension(Device);
 
+	//инициализируем структуру конфигурации очереди запросов ввода-вывода
 	WDF_IO_QUEUE_CONFIG_INIT_DEFAULT_QUEUE( &IOQueueConfig, WdfIoQueueDispatchSequential);
 
+	//"инициализируем" методы, вызываемые при обработке событий генерируемых при запросах
+	//IRP_MJ_DEVICE_CONTROL
 	IOQueueConfig.EvtIoDeviceControl = VHDDEvtIoDeviceControl;
+	//IRP_MJ_READ
     IOQueueConfig.EvtIoRead = VHDDEvtIoRead;
+	//IRP_MJ_WRITE
     IOQueueConfig.EvtIoWrite = VHDDEvtIoWrite;
 
+	//инициализируем аттрибуты устройства и "встраиваем" расширения очереди запросов ввода-вывода в структуру аттрибутов
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&QueueAttributes, QUEUE_EXTENSION);
+
+	//создаем объет очереди
 	if(!NT_SUCCESS(status = WdfIoQueueCreate(Device, &IOQueueConfig, &QueueAttributes, &Queue)))
 	{	
 		CheckStatus(status);
 		DbgPrint("return after WdfIoQueueCreate");
 		return status;
 	}
+	//получаем указатель на структуру расширения очереди
 	pQueueExtension = QueueGetExtension(Queue);
+	//инициализируем значения структуры расширения очереди
 	pQueueExtension->DeviceExtension = pDeviceExtension;
-
-    pDeviceExtension->DiskRegInfo.DriveLetter.Buffer =
-        (PWSTR) &pDeviceExtension->DriveLetterBuffer;
-    pDeviceExtension->DiskRegInfo.DriveLetter.MaximumLength =
-        sizeof(pDeviceExtension->DriveLetterBuffer);
-
+	//инициализируем значения структуры расширения устройства
+    pDeviceExtension->DiskRegInfo.DriveLetter.Buffer = (PWSTR) &pDeviceExtension->DriveLetterBuffer;
+    pDeviceExtension->DiskRegInfo.DriveLetter.MaximumLength = sizeof(pDeviceExtension->DriveLetterBuffer);
+	//получаем необходимые значения из реестра
     VHDDQueryDiskRegParameters(WdfDriverGetRegistryPath(WdfDeviceGetDriver(Device)),&pDeviceExtension->DiskRegInfo);
-	pDeviceExtension->DiskImage != NULL ? DbgPrint("\n\nSUCCESSFULLY ALLOCATED %d BYTES\n\n",(pDeviceExtension->DiskRegInfo.DiskSize/DEFAULT_BYTES_PER_SECTOR*sizeof(PVOID))) : DbgPrint("\n\n\t\tALLOCATED ERROR\n\n");
 
     if (pDeviceExtension->DiskImage) {
 		
         UNICODE_STRING deviceName;
         UNICODE_STRING win32Name;
 
+		//создаем раздел и форматируем
 		VHDDFormatDisk(pDeviceExtension);
 
         status = STATUS_SUCCESS;
 
         RtlInitUnicodeString(&win32Name, DOS_DEVICE_NAME);
         RtlInitUnicodeString(&deviceName, NT_DEVICE_NAME);
-
-        pDeviceExtension->SymbolicLink.Buffer = (PWSTR)
-            &pDeviceExtension->DosDeviceNameBuffer;
-        pDeviceExtension->SymbolicLink.MaximumLength =
-            sizeof(pDeviceExtension->DosDeviceNameBuffer);
+		//инициализируем значения структуры расширения устройства
+        pDeviceExtension->SymbolicLink.Buffer = (PWSTR)&pDeviceExtension->DosDeviceNameBuffer;
+        pDeviceExtension->SymbolicLink.MaximumLength = sizeof(pDeviceExtension->DosDeviceNameBuffer);
         pDeviceExtension->SymbolicLink.Length = win32Name.Length;
 
         RtlCopyUnicodeString(&pDeviceExtension->SymbolicLink, &win32Name);
-        RtlAppendUnicodeStringToString(&pDeviceExtension->SymbolicLink,
-                                       &pDeviceExtension->DiskRegInfo.DriveLetter);
-
-        status = WdfDeviceCreateSymbolicLink(Device,
-                                             &pDeviceExtension->SymbolicLink);
+        RtlAppendUnicodeStringToString(&pDeviceExtension->SymbolicLink, &pDeviceExtension->DiskRegInfo.DriveLetter);
+		//создание символической ссылки для устройства
+        status = WdfDeviceCreateSymbolicLink(Device, &pDeviceExtension->SymbolicLink);
     }
 
 	return status;
@@ -126,6 +135,7 @@ VHDDQueryDiskRegParameters(
 
     ASSERT(RegistryPath != NULL);
 
+	//установка значений по умолчанию
     defDiskRegInfo.DiskSize          = DEFAULT_DISK_SIZE;
     defDiskRegInfo.RootDirEntries    = DEFAULT_ROOT_DIR_ENTRIES;
     defDiskRegInfo.SectorsPerCluster = DEFAULT_SECTORS_PER_CLUSTER;
@@ -133,6 +143,8 @@ VHDDQueryDiskRegParameters(
     RtlInitUnicodeString(&defDiskRegInfo.DriveLetter, DEFAULT_DRIVE_LETTER);
 
     RtlZeroMemory(rtlQueryRegTable, sizeof(rtlQueryRegTable));
+
+	//инициализация таблицы RTL_QUERY_REGISTRY_TABLE
 
     rtlQueryRegTable[0].Flags         = RTL_QUERY_REGISTRY_SUBKEY;
     rtlQueryRegTable[0].Name          = L"Parameters";
@@ -169,6 +181,7 @@ VHDDQueryDiskRegParameters(
     rtlQueryRegTable[4].DefaultData   = defDiskRegInfo.DriveLetter.Buffer;
     rtlQueryRegTable[4].DefaultLength = 0;
 
+	//получение ключей из реестра
     Status = RtlQueryRegistryValues(
                  RTL_REGISTRY_ABSOLUTE | RTL_REGISTRY_OPTIONAL,
                  RegistryPath,
@@ -178,7 +191,7 @@ VHDDQueryDiskRegParameters(
              );
 
     if (NT_SUCCESS(Status) == FALSE) {
-
+		//если не удалось получить значения, инициализируем значениями по умолчанию
         DiskRegInfo->DiskSize          = defDiskRegInfo.DiskSize;
         DiskRegInfo->RootDirEntries    = defDiskRegInfo.RootDirEntries;
         DiskRegInfo->SectorsPerCluster = defDiskRegInfo.SectorsPerCluster;
@@ -201,7 +214,7 @@ VOID VHDDEvtCleanupCallback(
     PAGED_CODE();
 
 	DbgPrint("VHDDEvtCleanUpCallback routine");
-
+	//освобождаем выделенную память
 		for(temp = 1; temp < DISK_IMAGE_SIZE; temp++){
 			if(pDeviceExtension->DiskImage[temp] != NULL){
 				ExFreePool(pDeviceExtension->DiskImage[temp]);	
@@ -341,34 +354,47 @@ VOID VHDDEvtIoRead(
     LARGE_INTEGER          ByteOffset;
 	UINT32				   Offset;
     WDFMEMORY              hMemory;
+	PVOID					temp;
+	
+	DbgPrint("VHDDEvtIoRead routine");
 
-												DbgPrint("VHDDEvtIoRead routine");
     WDF_REQUEST_PARAMETERS_INIT(&Parameters);
+	//получаем параметры запроса
     WdfRequestGetParameters(Request, &Parameters);
-
+	//получаем смещение чтения
     ByteOffset.QuadPart = Parameters.Parameters.Read.DeviceOffset/DEFAULT_BYTES_PER_SECTOR;
-												DbgPrint("\tREAD OFFSET : \t %d", Parameters.Parameters.Read.DeviceOffset/DEFAULT_BYTES_PER_SECTOR);
+	
+	DbgPrint("\tREAD OFFSET : \t %d", Parameters.Parameters.Read.DeviceOffset/DEFAULT_BYTES_PER_SECTOR);
+	//получаем данные о том, куда скопировать необходимые данные
+    Status = WdfRequestRetrieveOutputMemory(Request, &hMemory);
 
-        Status = WdfRequestRetrieveOutputMemory(Request, &hMemory);
 		if((PVOID)(devExt->DiskImage[ByteOffset.LowPart]) != NULL){
 			if(NT_SUCCESS(Status) && ByteOffset.LowPart < DISK_IMAGE_SIZE){
 					for(Offset = 0; Offset < Length / DEFAULT_BYTES_PER_SECTOR; Offset++, ByteOffset.LowPart++){
-												DbgPrint("===============READ=======================");
-												DbgPrint("Length / DEFAULT_BYTES_PER_SECTOR = %d\nByteOffset.LowPart = %d\nOffset = %d", Length / DEFAULT_BYTES_PER_SECTOR, ByteOffset.LowPart, Offset);
-												DbgPrint("\t\t&(devExt->DiskImage[%d])\t0x%x", ByteOffset.LowPart, &(devExt->DiskImage[ByteOffset.LowPart]));
-												DbgPrint("\t\t\tdevExt->DiskImage[%d]\t0x%x", ByteOffset.LowPart,devExt->DiskImage[ByteOffset.LowPart]);
-												DbgPrint("\t\t\tLENGTH: %d", Length);
+						DbgPrint("===============READ=======================");
+						DbgPrint("Length / DEFAULT_BYTES_PER_SECTOR = %d\nByteOffset.LowPart = %d\nOffset = %d", Length / DEFAULT_BYTES_PER_SECTOR, ByteOffset.LowPart, Offset);
+						DbgPrint("\t\t\tLENGTH: %d", Length);
 
-
+							if(ByteOffset.LowPart > 10){
+								temp = (decompress((PVOID)devExt->DiskImage[ByteOffset.LowPart]));
+								Status = WdfMemoryCopyFromBuffer(hMemory,				//назначение 
+										Offset*DEFAULT_BYTES_PER_SECTOR,				//смещение в hMemory
+										temp,											//источник
+										DEFAULT_BYTES_PER_SECTOR);						//смещение в temp
+								ExFreePool(temp);
+							}
+							else{
+								Status = WdfMemoryCopyFromBuffer(hMemory,				//назначение 
+										Offset*DEFAULT_BYTES_PER_SECTOR,				//смещение в hMemory
+										(PVOID)(devExt->DiskImage[ByteOffset.LowPart]), //источник
+										DEFAULT_BYTES_PER_SECTOR);						//смещение в temp
+							}
 								
-						Status = WdfMemoryCopyFromBuffer(hMemory,   // Destination
-														 Offset*DEFAULT_BYTES_PER_SECTOR,         // Offset into the destination
-														 (PVOID)(devExt->DiskImage[ByteOffset.LowPart]), // source
-														 DEFAULT_BYTES_PER_SECTOR);
 					}
 				}
 		}
 		CheckStatus(Status);
+	//завершаем обработку запроса
     WdfRequestCompleteWithInformation(Request, Status, (ULONG_PTR)Length);
 }
 VOID VHDDEvtIoWrite(
@@ -384,41 +410,42 @@ VOID VHDDEvtIoWrite(
 	UINT32				   Offset;
     WDFMEMORY              hMemory;
 
-										DbgPrint("VHDDEvtIoWrite routine");
+	DbgPrint("VHDDEvtIoWrite routine");
 
     WDF_REQUEST_PARAMETERS_INIT(&Parameters);
+	//получаем параметры запроса
     WdfRequestGetParameters(Request, &Parameters);
-
+	//получаем смещение записи
     ByteOffset.QuadPart = Parameters.Parameters.Write.DeviceOffset/DEFAULT_BYTES_PER_SECTOR;
-										DbgPrint("\tWRITE OFFSET : \t %d", Parameters.Parameters.Write.DeviceOffset/DEFAULT_BYTES_PER_SECTOR);
+										
+	DbgPrint("\tWRITE OFFSET : \t %d", Parameters.Parameters.Write.DeviceOffset/DEFAULT_BYTES_PER_SECTOR);
 
         Status = WdfRequestRetrieveInputMemory(Request, &hMemory);
         if(NT_SUCCESS(Status) && ByteOffset.LowPart < DISK_IMAGE_SIZE){
-										DbgPrint("\t\t\tLENGTH: %d", Length);
-
+			DbgPrint("\t\t\tLENGTH: %d", Length);
 			for(Offset = 0; Offset < Length / DEFAULT_BYTES_PER_SECTOR; Offset++, ByteOffset.LowPart++){
-						
-										DbgPrint("===============WRITE=======================");
-										DbgPrint("Length / DEFAULT_BYTES_PER_SECTOR = %d\nByteOffset.LowPart = %d\nOffset = %d", Length / DEFAULT_BYTES_PER_SECTOR, ByteOffset.LowPart, Offset);
-				if(devExt->DiskImage[ByteOffset.LowPart]){
-					ExFreePool(devExt->DiskImage[ByteOffset.LowPart]); 
-					devExt->DiskImage[ByteOffset.LowPart] = 0;
-										DbgPrint("\t\tdeallocated : \n\t\t&(devExt->DiskImage[%d])\t0x%x", ByteOffset.LowPart, &(devExt->DiskImage[ByteOffset.LowPart]));
-										DbgPrint("\t\tdevExt->DiskImage[%d]\t0x%x", ByteOffset.LowPart,devExt->DiskImage[ByteOffset.LowPart]);
-				}
-				if(devExt->DiskImage[ByteOffset.LowPart] == NULL){
-					devExt->DiskImage[ByteOffset.LowPart] = ExAllocatePool( NonPagedPool, DEFAULT_BYTES_PER_SECTOR);
-					RtlZeroMemory(devExt->DiskImage[ByteOffset.LowPart], DEFAULT_BYTES_PER_SECTOR);
-										devExt->DiskImage[ByteOffset.LowPart] != NULL ? DbgPrint("\t\t\tsector #%d allocated:",ByteOffset.LowPart ) : DbgPrint("sector #%d didn't allocated",ByteOffset.LowPart);	
-										DbgPrint("\t\t\t&(devExt->DiskImage[%d])\t0x%x", ByteOffset.LowPart, &(devExt->DiskImage[ByteOffset.LowPart]));
-										DbgPrint("\t\t\t\tdevExt->DiskImage[%d]\t0x%x", ByteOffset.LowPart,devExt->DiskImage[ByteOffset.LowPart]);
-				}
-				if((PVOID)(devExt->DiskImage[ByteOffset.LowPart]) != NULL){
-					Status = WdfMemoryCopyToBuffer(hMemory, // Source
-										Offset*DEFAULT_BYTES_PER_SECTOR,              // offset in Source memory where the copy has to start
-										(PVOID)(devExt->DiskImage[ByteOffset.LowPart]), // destination
-										DEFAULT_BYTES_PER_SECTOR);
-				}
+				DbgPrint("===============WRITE=======================");
+				DbgPrint("Length / DEFAULT_BYTES_PER_SECTOR = %d\nByteOffset.LowPart = %d\nOffset = %d", Length / DEFAULT_BYTES_PER_SECTOR, ByteOffset.LowPart, Offset);
+					if(devExt->DiskImage[ByteOffset.LowPart]){
+						ExFreePool(devExt->DiskImage[ByteOffset.LowPart]); 
+						devExt->DiskImage[ByteOffset.LowPart] = 0;
+						DbgPrint("\t\tdeallocated : \n\t\t&(devExt->DiskImage[%d])\t0x%x", ByteOffset.LowPart, &(devExt->DiskImage[ByteOffset.LowPart]));
+					}
+					if(devExt->DiskImage[ByteOffset.LowPart] == NULL){
+						devExt->DiskImage[ByteOffset.LowPart] = ExAllocatePool( NonPagedPool, DEFAULT_BYTES_PER_SECTOR);
+						RtlZeroMemory(devExt->DiskImage[ByteOffset.LowPart], DEFAULT_BYTES_PER_SECTOR);
+						devExt->DiskImage[ByteOffset.LowPart] != NULL ? DbgPrint("\t\t\tsector #%d allocated:",ByteOffset.LowPart ) : DbgPrint("sector #%d didn't allocated",ByteOffset.LowPart);	
+					}
+					if((PVOID)(devExt->DiskImage[ByteOffset.LowPart]) != NULL){
+						Status = WdfMemoryCopyToBuffer(hMemory,								//источник
+											Offset*DEFAULT_BYTES_PER_SECTOR,				//смещение в источнике
+											(PVOID)(devExt->DiskImage[ByteOffset.LowPart]), //назначение
+											DEFAULT_BYTES_PER_SECTOR);						//смещение в назначении
+
+					}
+					if(ByteOffset.LowPart > 10) {
+						devExt->DiskImage[ByteOffset.LowPart] = compress((PVOID)devExt->DiskImage[ByteOffset.LowPart], DEFAULT_BYTES_PER_SECTOR);
+					}
 			}
         }
 		CheckStatus(Status);
@@ -470,10 +497,10 @@ VHDDFormatDisk(
 
 	devExt->DiskImage[0] = (ExAllocatePool( NonPagedPool, DEFAULT_BYTES_PER_SECTOR));
 
-										DbgPrint("\tdevExt->DiskImage\t0x%x", devExt->DiskImage);
-										DbgPrint("\t &(devExt->DiskImage[0])\t0x%x", &(devExt->DiskImage[0]));
-										DbgPrint("\tdevExt->DiskImage[0]\t0x%x", devExt->DiskImage[0]);
-										devExt->DiskImage[0] != NULL ? DbgPrint("boot sector allocated") : DbgPrint("boot sector didn't allocated");
+	DbgPrint("\tdevExt->DiskImage\t0x%x", devExt->DiskImage);
+	DbgPrint("\t &(devExt->DiskImage[0])\t0x%x", &(devExt->DiskImage[0]));
+	DbgPrint("\tdevExt->DiskImage[0]\t0x%x", devExt->DiskImage[0]);
+	devExt->DiskImage[0] != NULL ? DbgPrint("boot sector allocated") : DbgPrint("boot sector didn't allocated");
 
 	for(temp = 1; temp < 10; temp++){
 	    devExt->DiskImage[temp] = ExAllocatePool( NonPagedPool, DEFAULT_BYTES_PER_SECTOR);
@@ -483,19 +510,22 @@ VHDDFormatDisk(
 	for(temp = 10; temp < DISK_IMAGE_SIZE; temp++){
 		devExt->DiskImage[temp] = NULL;
 	}
+
+	//самый первый сектор диска инициализируется значениями загрузочного раздела файловой системы FAT16
 	bootSector  = (PBOOT_SECTOR)(devExt->DiskImage[0]);
 
     devExt->DiskGeometry.BytesPerSector = DEFAULT_BYTES_PER_SECTOR;
-    devExt->DiskGeometry.SectorsPerTrack = 32;     // Using VHDD value
-    devExt->DiskGeometry.TracksPerCylinder = 2;    // Using VHDD value
+    devExt->DiskGeometry.SectorsPerTrack = 32;
+    devExt->DiskGeometry.TracksPerCylinder = 2; 
 
     devExt->DiskGeometry.Cylinders.QuadPart = devExt->DiskRegInfo.DiskSize / DEFAULT_BYTES_PER_SECTOR / 32 / 2;
 
     devExt->DiskGeometry.MediaType = VHDD_MEDIA_TYPE;
-										DbgPrint("Cylinders: %ld", devExt->DiskGeometry.Cylinders.QuadPart);
-										DbgPrint("TracksPerCylinder: %ld", devExt->DiskGeometry.TracksPerCylinder);
-										DbgPrint("SectorsPerTrack: %ld", devExt->DiskGeometry.SectorsPerTrack);
-										DbgPrint("BytesPerSector: %ld", devExt->DiskGeometry.BytesPerSector);
+
+	DbgPrint("Cylinders: %ld", devExt->DiskGeometry.Cylinders.QuadPart);
+	DbgPrint("TracksPerCylinder: %ld", devExt->DiskGeometry.TracksPerCylinder);
+	DbgPrint("SectorsPerTrack: %ld", devExt->DiskGeometry.SectorsPerTrack);
+	DbgPrint("BytesPerSector: %ld", devExt->DiskGeometry.BytesPerSector);
 
     rootDirEntries = devExt->DiskRegInfo.RootDirEntries;
     sectorsPerCluster = devExt->DiskRegInfo.SectorsPerCluster;
@@ -506,7 +536,7 @@ VHDDFormatDisk(
         rootDirEntries = (rootDirEntries + (DIR_ENTRIES_PER_SECTOR - 1)) & ~ (DIR_ENTRIES_PER_SECTOR - 1);
     }
 
-										DbgPrint("Root dir entries: %ld\nSectors/cluster: %ld\n",rootDirEntries, sectorsPerCluster);
+	DbgPrint("Root dir entries: %ld\nSectors/cluster: %ld\n",rootDirEntries, sectorsPerCluster);
 
     bootSector->bsJump[0] = 0xeb;
     bootSector->bsJump[1] = 0x3c;
@@ -535,11 +565,12 @@ VHDDFormatDisk(
 				bootSector->bsRootDirEnts / DIR_ENTRIES_PER_SECTOR) /
                 bootSector->bsSecPerClus + 2;
 
+    fatSectorCnt = (fatEntries * 2 + DEFAULT_BYTES_PER_SECTOR - 1) / DEFAULT_BYTES_PER_SECTOR;
+    fatEntries   = fatEntries + fatSectorCnt;
+    fatSectorCnt = (fatEntries * 2 + DEFAULT_BYTES_PER_SECTOR - 1) / DEFAULT_BYTES_PER_SECTOR;
 
-        fatSectorCnt = (fatEntries * 2 + DEFAULT_BYTES_PER_SECTOR - 1) / DEFAULT_BYTES_PER_SECTOR;
-        fatEntries   = fatEntries + fatSectorCnt;
-        fatSectorCnt = (fatEntries * 2 + DEFAULT_BYTES_PER_SECTOR - 1) / DEFAULT_BYTES_PER_SECTOR;
-						DbgPrint("FatEntries = %d\nFatSectorCnt = %d", fatEntries, fatSectorCnt);
+	DbgPrint("FatEntries = %d\nFatSectorCnt = %d", fatEntries, fatSectorCnt);
+
     bootSector->bsFATsecs       = fatSectorCnt;
     bootSector->bsSecPerTrack   = (USHORT)devExt->DiskGeometry.SectorsPerTrack;
     bootSector->bsHeads         = (USHORT)devExt->DiskGeometry.TracksPerCylinder;
@@ -595,7 +626,16 @@ VHDDFormatDisk(
     rootDir->deExtension[2] = 'D';
 
     rootDir->deAttributes = DIR_ATTR_VOLUME;
-											DbgPrint("\n\n\t\t\t%s\n\n", ((PBOOT_SECTOR)(PVOID)(devExt->DiskImage[0]))->bsOemName);
-											DbgPrint("FILE SYSTEM : FAT16");
+
+	DbgPrint("\n\n\t\t\t%s\n\n", ((PBOOT_SECTOR)(PVOID)(devExt->DiskImage[0]))->bsOemName);
+	DbgPrint("FILE SYSTEM : FAT16");
+
+	//{
+	//	int i = 0;
+	//	for(i = 0; i < 10; i++){
+	//		devExt->DiskImage[i] = compress(devExt->DiskImage[i], DEFAULT_BYTES_PER_SECTOR);
+	//		DbgPrint("\t%d", *(unsigned short*)(devExt->DiskImage[i]));
+	//	}
+	//}
     return STATUS_SUCCESS;
 }
