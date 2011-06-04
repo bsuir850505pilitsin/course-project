@@ -375,21 +375,13 @@ VOID VHDDEvtIoRead(
 						DbgPrint("Length / DEFAULT_BYTES_PER_SECTOR = %d\nByteOffset.LowPart = %d\nOffset = %d", Length / DEFAULT_BYTES_PER_SECTOR, ByteOffset.LowPart, Offset);
 						DbgPrint("\t\t\tLENGTH: %d", Length);
 
-							if(ByteOffset.LowPart > 10){
-								temp = (decompress((PVOID)devExt->DiskImage[ByteOffset.LowPart]));
+								temp = decompress(devExt->DiskImage[ByteOffset.LowPart]);
 								Status = WdfMemoryCopyFromBuffer(hMemory,				//назначение 
 										Offset*DEFAULT_BYTES_PER_SECTOR,				//смещение в hMemory
-										temp,											//источник
+										temp ,											//источник
 										DEFAULT_BYTES_PER_SECTOR);						//смещение в temp
 								ExFreePool(temp);
-							}
-							else{
-								Status = WdfMemoryCopyFromBuffer(hMemory,				//назначение 
-										Offset*DEFAULT_BYTES_PER_SECTOR,				//смещение в hMemory
-										(PVOID)(devExt->DiskImage[ByteOffset.LowPart]), //источник
-										DEFAULT_BYTES_PER_SECTOR);						//смещение в temp
-							}
-								
+
 					}
 				}
 		}
@@ -443,9 +435,7 @@ VOID VHDDEvtIoWrite(
 											DEFAULT_BYTES_PER_SECTOR);						//смещение в назначении
 
 					}
-					if(ByteOffset.LowPart > 10) {
 						devExt->DiskImage[ByteOffset.LowPart] = compress((PVOID)devExt->DiskImage[ByteOffset.LowPart], DEFAULT_BYTES_PER_SECTOR);
-					}
 			}
         }
 		CheckStatus(Status);
@@ -502,12 +492,12 @@ VHDDFormatDisk(
 	DbgPrint("\tdevExt->DiskImage[0]\t0x%x", devExt->DiskImage[0]);
 	devExt->DiskImage[0] != NULL ? DbgPrint("boot sector allocated") : DbgPrint("boot sector didn't allocated");
 
-	for(temp = 1; temp < 10; temp++){
+	for(temp = 1; temp < 6; temp++){
 	    devExt->DiskImage[temp] = ExAllocatePool( NonPagedPool, DEFAULT_BYTES_PER_SECTOR);
 		RtlZeroMemory(devExt->DiskImage[temp], DEFAULT_BYTES_PER_SECTOR);
 		devExt->DiskImage[temp] != NULL ? DbgPrint("sector #%d allocated",temp ) : DbgPrint("sector #%d didn't allocated",temp);	
 	}
-	for(temp = 10; temp < DISK_IMAGE_SIZE; temp++){
+	for(temp = 6; temp < DISK_IMAGE_SIZE; temp++){
 		devExt->DiskImage[temp] = NULL;
 	}
 
@@ -630,12 +620,11 @@ VHDDFormatDisk(
 	DbgPrint("\n\n\t\t\t%s\n\n", ((PBOOT_SECTOR)(PVOID)(devExt->DiskImage[0]))->bsOemName);
 	DbgPrint("FILE SYSTEM : FAT16");
 
-	//{
-	//	int i = 0;
-	//	for(i = 0; i < 10; i++){
-	//		devExt->DiskImage[i] = compress(devExt->DiskImage[i], DEFAULT_BYTES_PER_SECTOR);
-	//		DbgPrint("\t%d", *(unsigned short*)(devExt->DiskImage[i]));
-	//	}
-	//}
+	{
+		int i = 0;
+		for(i = 0; i < 6; i++){
+			devExt->DiskImage[i] = compress(devExt->DiskImage[i], DEFAULT_BYTES_PER_SECTOR);
+		}
+	}
     return STATUS_SUCCESS;
 }

@@ -31,7 +31,8 @@ PVOID compress(PVOID data, USHORT size){
 	}
 	myFree((PVOID)dict);
 	myFree((PVOID) values);
-	myFree((PVOID) root);
+	treeFree(root);
+	//myFree((PVOID) root);
 	myFree(data);
 return (PVOID)c_data; 
 }
@@ -52,28 +53,24 @@ PVOID decompress(const PVOID data){
 	c_data = (PUCHAR)data;
 	inf = getPackageData((PVOID)c_data);
 	d_data = (PUCHAR)myMalloc(inf.decompressedSize * sizeof(UCHAR));
-	DbgPrint("<mark%d>", 1);
 	v_size = inf.numOfSymbolsInDictionary;
 	//создание массива с данными о кодированных символах и их количестве в кодированном массиве
-	values = (struct character*)myMalloc(v_size * sizeof(struct character));
-	DbgPrint("<mark%d>", 2);
-	for(i = 0; i < v_size; i++){
+	values = (struct character*)myMalloc((v_size+1) * sizeof(struct character));
+	for(i = 0; i <= v_size; i++){
 		values[i].value = c_data[inf.dictionaryOffset + i*(sizeof(USHORT)+sizeof(UCHAR))]; 
-		values[i].num = *(PUSHORT)(c_data + inf.dictionaryOffset + i*(sizeof(USHORT)+ sizeof(UCHAR))  + sizeof(UCHAR));
+		values[i].num = *(PUSHORT)(c_data + inf.dictionaryOffset + i*(sizeof(USHORT) + sizeof(UCHAR))  + sizeof(UCHAR));
 	}
-	DbgPrint("<mark%d>", 3);
-	if(v_size == 1){
+	if(v_size == 0){
 		for(i = 0; i < inf.decompressedSize; i++){
 			d_data[i] = values[0].value;
 		}
 		myFree((PVOID)values);
 		return (PVOID)d_data;
 	}
-	DbgPrint("<mark%d>", 4);
 	//создание дерева
-	root = createTree(values, v_size);
+	root = createTree(values, (v_size+1));
 	//декомпрессия данных
-	for(i_index = 0, o_index = 0, temp = root; i_index <= inf.compressedSize; i_index++){
+	for(i_index = 0, o_index = 0, temp = root; i_index < inf.compressedSize && o_index < inf.decompressedSize; i_index++){
 		for(n_bit = 0; n_bit < 8; n_bit++){
 			if(temp->left != NULL && temp->right != NULL){
 				if(((c_data[i_index + inf.dataOffset] << n_bit)&128 ? RIGHT : LEFT) == RIGHT) {
@@ -86,16 +83,16 @@ PVOID decompress(const PVOID data){
 			if(temp->left == NULL && temp->right == NULL){
 					d_data[o_index] = temp->ch->value;
 					o_index++;
+					if(o_index >= inf.decompressedSize) {DbgPrint("buffer OVERFLOW"); break;}
 					temp = root;
-					if(i_index == (inf.compressedSize - 1) &&  (8 - n_bit) == inf.nullBitsInLastByte) break;
+					if(i_index == inf.compressedSize && (8 - n_bit) == inf.nullBitsInLastByte) break;
 			}
 				
 		}
 	}
-	DbgPrint("<mark%d>", 5);
-	myFree((PVOID)root);
+	treeFree(root);
+	//myFree((PVOID)root);
 	myFree((PVOID)values);
-	//myFree(data);
 	return (PVOID)d_data;
 }
 
@@ -113,6 +110,11 @@ void myFree(void *mem){
 	PAGED_CODE();
 
 	ExFreePool(mem);
+}
+void treeFree(struct tree* root){
+	if(root->right != NULL) treeFree(root->right);
+	if(root->left != NULL) treeFree(root->left);
+	myFree((void*)root);
 }
 
 struct packageData getPackageData(PVOID input){
@@ -174,7 +176,7 @@ struct character* pass0(PVOID data, USHORT size, PUSHORT v_size){
 			n++;
 		}
 	}
-	myFree((PVOID)values);
+	//myFree((PVOID)values);
 return temp;
 }
 
@@ -242,13 +244,13 @@ int searchCharInTree(struct tree* root, UCHAR data, struct code* code){
 
 	if(root->right)	if(searchCharInTree(root->right, data, code)){
 			code->bit_code >>= 1;
-			code->bit_code = code->bit_code|RIGHT*128;
+			code->bit_code = code->bit_code|RIGHT*32768;
 			code->n_bit++;
 			return 1;
 	}
 	if(root->left) if(searchCharInTree(root->left, data, code)){
 			code->bit_code >>= 1;
-			code->bit_code = code->bit_code|LEFT*128;
+			code->bit_code = code->bit_code|LEFT*32768;
 			code->n_bit++;
 			return 1;
 	}
@@ -290,11 +292,11 @@ PUCHAR pass1(PVOID i_data, USHORT size, struct dictionary** dict, USHORT v_size)
 
 	data = (PUCHAR)i_data;
 	c_data = (PUCHAR)myMalloc(size*sizeof(UCHAR));
-	
+	i_index = 0;
 	for(i_index = 0, o_index = 0, outbyte_bit = 0; i_index < size; i_index++){
 		UCHAR_index = getCharIndex(data[i_index] , dict,  v_size);
 		for(code_bit = 0; code_bit < dict[UCHAR_index]->cd->n_bit; code_bit++ ){
-				c_data[o_index] = c_data[o_index] | (((dict[UCHAR_index]->cd->bit_code << code_bit ) & 128)? RIGHT : LEFT );
+				c_data[o_index] = c_data[o_index] | (((dict[UCHAR_index]->cd->bit_code << code_bit ) & 32768)? RIGHT : LEFT );
 				if(outbyte_bit != 7){
 					c_data[o_index] <<= 1;
 					outbyte_bit++;
@@ -339,7 +341,6 @@ PUCHAR pass1(PVOID i_data, USHORT size, struct dictionary** dict, USHORT v_size)
 		myFree((PVOID)c_data);
 		c_data = temp;
 	}
-
 return c_data;
 }
 

@@ -74,6 +74,10 @@ PVOID myMalloc(int size);
 **/
 void myFree(void *mem);
 /**
+	treeFree() освобождает ресурсы занимаемые деревом
+**/
+void treeFree(struct tree* root);
+/**
 	getPackageData() функция возвращает структуру packageData с основными параметрами
 	пакета данных
 	принимаемые значения:

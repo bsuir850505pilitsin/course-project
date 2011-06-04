@@ -4,6 +4,7 @@ Class=DiskDrive
 ClassGuid={53F56307-B6BF-11D0-94F2-00A0C91EFB8B}; 
 Provider=%ProviderName%
 DriverVer=04/03/2011,6.1.7600.16380
+CatalogFile=VHDD.cat
 
 [SourceDisksNames]
 1=%VHDDInstDisk%,

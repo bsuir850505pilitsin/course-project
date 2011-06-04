@@ -33,10 +33,10 @@
 #define DEFAULT_SECTORS_PER_CLUSTER     2						//Количество секторов на кластер
 #define DEFAULT_DRIVE_LETTER            L"V:"					//Буква диска по умолчанию
 #define DISK_IMAGE_SIZE					DEFAULT_DISK_SIZE/DEFAULT_BYTES_PER_SECTOR //Размер массива указателей
-///Структура данных содержащая параметры диска
+///Структура данных содержащая параметры диска получаемые из реестра
 typedef struct _DISK_INFO {
     ULONG					DiskSize;           // Размер диска в байтах
-    ULONG					RootDirEntries;     // Количество файлов в корневом каталоге
+    ULONG					RootDirEntries;     // Количество директорий в корневом каталоге
     ULONG					SectorsPerCluster;  // Количество секторов на кластер
     UNICODE_STRING			DriveLetter;		// Буква диска
 } DISK_INFO, *PDISK_INFO;
@@ -109,7 +109,6 @@ EVT_WDF_OBJECT_CONTEXT_CLEANUP VHDDEvtCleanupCallback;
 EVT_WDF_IO_QUEUE_IO_DEVICE_CONTROL  VHDDEvtIoDeviceControl;
 EVT_WDF_IO_QUEUE_IO_WRITE  VHDDEvtIoWrite;
 EVT_WDF_IO_QUEUE_IO_READ  VHDDEvtIoRead;
-EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL VHDDEvtIoInternalDeviceControl;
 
 /**
 	DriverEntry() стандартная точка входа драйвера, производящая инициализацию драйвера
